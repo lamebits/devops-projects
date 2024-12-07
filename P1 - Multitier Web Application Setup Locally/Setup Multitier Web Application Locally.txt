@@ -1,0 +1,10 @@
+1. Download Vprofile Project from the Github.
+   https://github.com/hkhcoder/vprofile-project
+2. Open Vagrantfile where configuration of all services like Tomcat, RabbitMQ, Memecache, Nginx and MySql are mentioned.
+3. Check Vagrant Up for all the services and ssh to root user 
+	1. vagrant up
+	2. ssh -i
+	3. ping <vmname> -c 4
+4. cat /etc/hosts
+5. Login to every VMs and install respective services.
+6. Validate Nginx Ip in browser 0.0.0.0:80

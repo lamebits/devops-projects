@@ -1,0 +1,195 @@
+1. Login to AWS Account
+2. Create Key Pairs
+	2.1 vprofile-prod-key.pem
+3. Create Security groups
+	3.1 Load Balancer = vprofile-ELB-SG, HTTP[IPV4],HTTP[IPV6],HTTPS[IPV4],HTTPS[IPV6]
+	3.2 Tomcat Server = vprofile-app-SG, Custom TCP[8080],[vprofile-ELB-SG], SSH[22][My IP]
+	3.3 Backend[mysql, Memcached, RabbitMQ] = vprofile-backend-SG, MYSQL[3306][vprofile-app-SG], Custom TCP[11211][vprofile-app-SG], Custom TCP[5672][vprofile-app-SG], Custom TCP[22][My IP], All Traffic[Custome][vprofile-backend-SG]
+4. Launch Instances with user data[Bash Script]
+	4.1 vprofile-db01 [MySql]
+		4.1.1 OS -Amazon Linux
+		4.1.2 Key Pair - vprofile-prod-key.pem
+		4.1.3 Security Group - vprofile-backend-SG
+		4.1.4 Mysql Bash Script
+			    #!/bin/bash
+				DATABASE_PASS='admin123'
+
+				# MEmcache
+				yum install epel-release -y
+				yum install memcached -y
+				systemctl start memcached
+				systemctl enable memcached
+				systemctl status memcached
+				memcached -p 11211 -U 11111 -u memcached -d
+
+				# Rabbit
+				yum install socat -y
+				yum install erlang -y
+				yum install wget -y
+				wget https://www.rabbitmq.com/releases/rabbitmq-server/v3.6.10/rabbitmq-server-3.6.10-1.el7.noarch.rpm
+				rpm --import https://www.rabbitmq.com/rabbitmq-release-signing-key.asc
+				yum update
+				rpm -Uvh rabbitmq-server-3.6.10-1.el7.noarch.rpm
+				systemctl start rabbitmq-server
+				systemctl enable rabbitmq-server
+				systemctl status rabbitmq-server
+				echo "[{rabbit, [{loopback_users, []}]}]." > /etc/rabbitmq/rabbitmq.config
+				rabbitmqctl add_user rabbit bunny
+				rabbitmqctl set_user_tags rabbit administrator
+				systemctl restart rabbitmq-server
+
+				# Mysql
+				yum install mariadb-server -y
+
+				#mysql_secure_installation
+				sed -i 's/^127.0.0.1/0.0.0.0/' /etc/my.cnf
+
+				# starting & enabling mariadb-server
+				systemctl start mariadb
+				systemctl enable mariadb
+
+				#restore the dump file for the application
+				mysqladmin -u root password "$DATABASE_PASS"
+				mysql -u root -p"$DATABASE_PASS" -e "UPDATE mysql.user SET Password=PASSWORD('$DATABASE_PASS') WHERE User='root'"
+				mysql -u root -p"$DATABASE_PASS" -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')"
+				mysql -u root -p"$DATABASE_PASS" -e "DELETE FROM mysql.user WHERE User=''"
+				mysql -u root -p"$DATABASE_PASS" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%'"
+				mysql -u root -p"$DATABASE_PASS" -e "FLUSH PRIVILEGES"
+				mysql -u root -p"$DATABASE_PASS" -e "create database accounts"
+				mysql -u root -p"$DATABASE_PASS" -e "grant all privileges on accounts.* TO 'admin'@'localhost' identified by 'admin123'"
+				mysql -u root -p"$DATABASE_PASS" -e "grant all privileges on accounts.* TO 'admin'@'app01' identified by 'admin123'"
+				mysql -u root -p"$DATABASE_PASS" accounts < /vagrant/vprofile-repo/src/main/resources/db_backup.sql
+				mysql -u root -p"$DATABASE_PASS" -e "FLUSH PRIVILEGES"
+
+				# Restart mariadb-server
+				systemctl restart mariadb
+		4.2 vprofile-mc01 [Memcached]
+			4.2.1 OS - Amazon Linux
+			4.2.2 Key Pair - vprofile-prod-key.pem
+			4.2.3 Security Group - vprofile-backend-SG
+			4.2.4 Memcached Bash Script 
+				#!/bin/bash
+				sudo dnf install memcached -y
+				sudo systemctl start memcached
+				sudo systemctl enable memcached
+				sudo systemctl status memcached
+				sed -i 's/127.0.0.1/0.0.0.0/g' /etc/sysconfig/memcached
+				sudo systemctl restart memcached
+				sudo memcached -p 11211 -U 11111 -u memcached -d
+				
+		4.3 vprofile-rmq01 [RabbitMQ]
+			4.3.1 OS - Amazon Linux
+			4.3.2 Key Pair - vprofile-prod-key.pem
+			4.3.3 Security Group - vprofile-backend-SG
+			4.3.4 RabbitMQ Bash Script
+				#!/bin/bash
+				## primary RabbitMQ signing key
+				rpm --import 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc'
+				## modern Erlang repository
+				rpm --import 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/cloudsmith.rabbitmq-erlang.E495BB49CC4BBE5B.key'
+				## RabbitMQ server repository
+				rpm --import 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/cloudsmith.rabbitmq-server.9F4587F226208342.key'
+				curl -o /etc/yum.repos.d/rabbitmq.repo https://raw.githubusercontent.com/hkhcoder/vprofile-project/refs/heads/awsliftandshift/al2023rmq.repo
+				dnf update -y
+				## install these dependencies from standard OS repositories
+				dnf install socat logrotate -y
+				## install RabbitMQ and zero dependency Erlang
+				dnf install -y erlang rabbitmq-server
+				systemctl enable rabbitmq-server
+				systemctl start rabbitmq-server
+				sudo sh -c 'echo "[{rabbit, [{loopback_users, []}]}]." > /etc/rabbitmq/rabbitmq.config'
+				sudo rabbitmqctl add_user test test
+				sudo rabbitmqctl set_user_tags test administrator
+				rabbitmqctl set_permissions -p / test ".*" ".*" ".*"
+
+				sudo systemctl restart rabbitmq-server
+
+		4.4 vprofile-app01 [Tomcat]
+			4.3.1 OS - Ubuntu 24
+			4.3.2 Key Pair - vprofile-prod-key.pem
+			4.3.3 Security Group - vprofile-app-SG
+			4.3.4 Tomcat Bash Script
+				#!/bin/bash
+				sudo apt update
+				sudo apt upgrade -y
+				sudo apt install openjdk-17-jdk -y
+				sudo apt install tomcat10 tomcat10-admin tomcat10-docs tomcat10-common git -y
+				
+		4.5 SSh all services to check the running status
+			4.5.1 ssh -i vprofile-prod-key.pem ec2-user@<ip>
+			4.5.2 sudo -i
+			4.5.3 For Mysql = systemctl status mariadb, mysql -u admin -padmin123 accounts;
+				  For Memcached = systemctl status memcached
+				  For Rabbitmq = systemctl status rabbitmq-server
+				  For Tomcat = 
+
+5. Update IP to name mapping in Route 53
+	Need DNS to resolve HostName into IPaddresses
+	5.1 Create Host Zone - vprofile.in
+	5.2 Create Records for db01,app01, mc01 and rmq01 with EC2 Instance Private IP Address.
+	5.3 Check all services like db01. mc01,rmq01 in app01 ssh using command "ping -c 4 db01.vprofile.in"
+	
+6. Create IAM User for authentication for building the app and IAM Role to pull the request from tomcat server inorder to communite with S3 bucket.
+	6.1 Create s3 bucket - vprofile-liftshiftapp-s3
+	6.2 Create IAM user - vprofile-admin	
+		6.2.1 Enable service - AmazonS3FullAccess
+		6.2.2 Download accesskey of user.
+	6.3 Create IAM Role - s3-admin, EC2 service role and enable AmazonS3FullAccess service
+	6.4 Open EC2 Instance vprofile-app01-> Actions-> security -> Assign s3-admin role which can allow to store artifacts in S3 bucket.
+	6.5 Open application.properties file and change host name as db01.vprofile.in as mentioned in Route S3 Private IP mapping.
+	
+7. Build Application from source code
+	7.1 open gitbash and check following packages
+		7.1.1 mvn --version
+		7.1.2 aws
+		7.1.3 mvn install (to build the artifact) target folder will created and inside it vprofile-v2.war file created.
+		7.1.4 aws configure (fill and access and secret keys) if mistake to type wrong keys then using command "vim ~/.aws/credentials" and "vim ~/.aws/config"
+		
+8. Upload to s3 bucket
+	command to upload: aws s3 cp target/vprofile-v2.war s3://vprofile-liftshiftapp-s3
+	command to list: aws s3 ls s3://vprofile-liftshiftapp-s3
+	
+9. Download artifact to Tomcat EC2 Instances
+	9.1 SSh to app01 Ec2 instance and install aws-cli and fetch artifact to app01 EC2 instance form S3 bucket.
+		snap install aws-cli --classic
+		aws s3 cp s3://vprofile-liftshiftapp-s3/vprofile-v2.war /tmp/
+		systemctl daemon-reload
+		systemctl stop tomcat10
+		rm -rf /var/lib/tomcat10/webapps/ROOT
+		cp /tmp/vprofile-v2.war /var/lib/tomcat10/webapps/ROOT.war
+		systemctl start tomcat10
+		ls /var/lib/tomcat10/webapps/
+		
+10. Setup ELB with HTTPS [Cert from Amazon Certificate Manager]
+	10.1 Create Target Group [vprofile-las-tg] and set 8080 port also overide the health check to 8080 port and select app01 instance.
+		10.1.1 Turn on Stickness in order to prevent session[multiple instance in browser]
+	10.2 Create Load Balancer 
+		10.2.1 Application oad Balancer
+		10.2.2 vprofile-las-elb
+		10.2.3 enable all availability region
+		10.2.4 Select security group vprofile-ELB-SG
+		10.2.5 Listener and routing: select target group vprofile-las-tg for HTTP & HTTPS
+		10.2.6 Select Certificate
+	
+11. Map ELB Endpoint to website name in Godaddy DNS
+	Copy load balancer DNS Name and add into Godaddy website with CNAME.
+	
+12. Verify url <appname>.dnsname 
+	
+13. Build AutoScaling Group for Tomcat Instances
+	13.1 Create AMI Image for tomcat app01 [vprofile-las-app-ami]
+	13.2 Launch Template [vprofile-lass-app-LT]
+		13.2.1 Select AMI
+		13.2.2 Select Key Pair[vprofile-prod-key]
+		13.2.3 Select Security Group[vprofile-app-sg]
+		13.2.4 Select IAM Instance Profile in Advance session.
+	13.3 Create Auto Scaling Group
+		13.3.1 Name : vprofile-las-app-asg
+		13.3.2 Select Launch Template
+		13.3.3 Select Attache to an exisiting load balancer
+		13.3.4 Select Load Balancer [vprofile-las-tg]
+		13.3.5 Turn on Elastic Load Balancing health checks
+		13.3.6 Select Min/Max desired capacity
+		13.3.7 Select Target tracking scaling policy
+		
+	

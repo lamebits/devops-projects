@@ -1,0 +1,127 @@
+1. Login to AWS Account
+2. Create Key Pair for beanstalk instance login [vprofile-rearch-key.pem]
+3. Create security group for Elasticcache, RDS & ActiveMQ
+	Security Group [vprofile-backend-sg] = All Traffic -> itself
+4. Create RDS, Amazon Elastic Cache, Amazon Active MQ
+	4.1 Create Amazon RDS
+		4.1.1 Create Parameter Group [vprofile-rds-rearch-paragrp]
+			4.1.1.1 Engine Type MYSQL Community
+			4.1.1.2 Parameters group family mysql8.0
+			4.1.1.3 DB Parameter Group Type
+		4.1.2 Create Subnet Group [vprofile-rds-rearch-subgrp]
+			4.1.2.1 Select availability Zone
+		4.1.3 Create Database
+			4.1.3.1 Select Standard Create
+			4.1.3.2 Select Mysql Engine Option
+			4.1.3.3 Select Free Tier Template
+			4.1.3.4 DB instance identifier [vprofile-rds-rearch]
+			4.1.3.5 Enable Auto generated Password
+			4.1.3.6 Select db.t4g.micro
+			4.1.3.7 Select General Purpose SSG (gp3) Storage Type
+			4.1.3.8 Diable Auto Scaling Group
+			4.1.3.9 Select VPC and DB Subnet Group, VPC security group
+			4.1.3.10 Initial database name [accounts]
+			4.1.3.11 Select db parameter group[vprofile-rds-rearch-paragrp]
+			4.1.3.12 Diabled Backup option
+			4.1.3.13 Save
+	4.2 Create Elastic Cache
+		4.2.1 Create Parameter Group
+			4.2.1.1 Name = vprofile-rearch-cache-paragrp
+			4.2.1.2 Family = memcached 1.6
+		4.2.2 Create Subnet Group
+			4.2.2.1 Name vprofile-rearch-cache-subgrp
+		4.2.3 Create Memcached
+			4.2.3.1 Enable Design your own cache-paragrp
+			4.2.3.2 Enable Standard create
+			4.2.3.3 Cluster Info [vprofile-reach-cache]
+			4.2.3.4 Select Parameter Group [vprofile-rearch-cache-paragrp]
+			4.2.3.5 Node Type cache-t4g.micro
+			4.2.3.6 Select exisiting subnet group
+			4.2.3.7 Select Security group [vprofile-rearch-sg]
+			4.2.3.8 Save
+	4.3 Amazon MQ
+		4.3.1 Select Broker Engine Type = RabbitMQ
+		4.3.2 Select Single instance Broker
+		4.3.3 Brokername = vprofile-rearch-rabbitmq
+		4.3.4 Select mq.t3.micro
+		4.3.5 Broker Engine version 3.13
+		4.3.6 Private access type
+		4.3.7 Select exisitng VPC and Subnet
+		4.3.8 Select exisiting security group
+		4.3.9 Create Broker
+		
+5. Launch EC2 Instance for DB Initializing
+	5.1 Create EC2 Instance -> Ubuntu -> KeyPair -> security group[vprofile-mysql-sg]
+	5.2 Update SG of backend to allow traffic from bean SG
+		in backend security group allow MYSQL EC2 instance mysql security group.
+	5.3 Login to the instance and Inititialize RDS DB
+		5.3.1 apt update && apt install mysql-client git -y
+		5.3.2 mysql -h RDS-endpoint(vprofile-rds-rearch.cvi0ms0c68nx.us-east-2.rds.amazonaws.com) -u admin -px2napAqvKbntpMdwGsCR accounts
+		5.3.3 git clone https://github.com/hkhcoder/vprofile-project.git
+		5.3.4 git checkout awsrefactor
+		5.3.5 cd vprofile-project
+		5.3.6 mysql -h vprofile-rds-rearch.cvi0ms0c68nx.us-east-2.rds.amazonaws.com -u admin -px2napAqvKbntpMdwGsCR accounts < src/main/resources/db_backup.sql
+		5.3.7 mysql -h vprofile-rds-rearch.cvi0ms0c68nx.us-east-2.rds.amazonaws.com -u admin -px2napAqvKbntpMdwGsCR accounts
+		5.3.8 show tables;
+	5.4 Delete Ec2 Instance for DB Initialization
+				
+6. Create Elastic Beanstalk Environment
+	6.1 Create Roles in IAM
+		6.1.1 Name = vprofile-rearch-beanrole
+		6.1.2 Policies = AdministratorAccess-AWSElasticBeanstalk,AWSElasticBeanstalkCustomPlatformforEC2Role,AWSElasticBeanstalkRoleSNS, AWSElasticBeanstalkWebTier
+	6.2 Create Elastic Beanstalk 
+		6.2.1 Name : vprofile-rearch-beanapp
+		6.2.2 Env Name: Vprofile-rearch-beanapp-prod
+		6.2.3 Domain: vprorearchapp
+		6.2.4 Platform: Tomcat
+		6.2.5 Custome configuration
+		6.2.6 Enable Create and use new service role
+		6.2.7 Select KeyPair and EC2 Instance vprofile-rearch-beanrole[Rolename]
+		6.2.8 Select VPC
+		6.2.9 Select all availability zone
+		6.2.10 Auto Scaling group Min:2 , Max:4
+		6.2.11 Intance Type t2.micro
+		6.2.12 In Process session enable stickness
+		6.2.13 Deployment Policy 50%
+		6.2.14 Submit
+		
+7. Build Artifact with Backend Information
+	7.1 Clone awsrefactor branch form repository "https://github.com/hkhcoder/vprofile-project.git" and edit application.properties file using below details
+	7.2 RDS
+		username = admin
+		password = x2napAqvKbntpMdwGsCR
+		RDS EndPoint=vprofile-rds-rearch.cvi0ms0c68nx.us-east-2.rds.amazonaws.com
+
+	7.3 RabbitMQ
+		username = rabbit
+		password = RabbitMQ@12345
+		MQ EndPoint = b-d51e1b79-2b5a-4185-9be1-980734ae6373.mq.us-east-2.amazonaws.com
+		Port: 5671
+		
+	7.4 ElasticCache EndPoint = vprofile-reach-cache.mgivv6.cfg.use2.cache.amazonaws.com
+		Port: 11211
+	
+	7.5 open git bash and build the project
+		-> mvn --version
+		-> mvn install
+		
+	7.6 Open BeanStalk and upload vprofile-v2.war file
+	
+8. Add 443 https Listner to ELB
+	Open ELB -> got to configuration -> Listener -> Add Listener.
+9. Change healthcheck on beanstalk to /login
+10. Create CDN(Content delivery Network- Low Latency and high transfer speed) with ssl Certificate	
+	10.1 Origin Domain
+	10.2 Match Viewer
+	10.3 Viewer Protocol Policy - HTTP and HTTPS
+	10.4 Allow HTTP Method - GET, POST, Put, Patch, Head, Delete, Options
+	10.5 Legacy Cache Setting - ALL
+	10.6 Do not enable security protections
+	10.7 Domain name like vprorearch.awsdevops.xyz
+	10.8 Select Certificate
+	10.9 Copy distribution domain name
+		 Add it into GoDaddy CNAMe-> vprorearch -> <DDN>
+11. Copy Domain of ELB and add into GoDaddy DNS Zone
+	CNAME -> vprofilerearch -> copied domain ELB
+12. Test the url
+

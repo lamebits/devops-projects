@@ -1,0 +1,140 @@
+1. Create DockerHub Account.
+	1.1 Create Organisation name vprofile and companyname visualpath.
+		-> Docker also provide Continuous Integration using GitHub and Bitbucket.
+2. Setup Dokcer Engine 
+	2.1 Git clone https://github.com/hkhcoder/vprofile-project.zip and branch is containers
+	2.2 Go to Vagrantfile and bring it up using "vagrant up" command.
+		https://docs.docker.com/engine/install/ubuntu/
+	2.3 Setup Docker Engine in ubuntu VM
+		# Add Docker's official GPG key:
+		sudo apt-get update
+		sudo apt-get install ca-certificates curl
+		sudo install -m 0755 -d /etc/apt/keyrings
+		sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+		sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+		# Add the repository to Apt sources:
+		echo \
+		  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+		  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+		  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+		sudo apt-get update
+		
+		sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+		
+		sudo docker run hello-world
+	2.4 usermod -aG <groupname> <username>
+		usermod -aG docker vagrant
+	2.5 docker images 
+3. Create docker hub repositories/Imagename
+	3.1 vprofileapp-docker
+	3.2 vprofiledb-docker
+	3.3 vprofileweb-docker
+4. Create Docker image file
+	4.1 app(Tomcat,Maven) - Dockerfile.yaml
+		FROM maven:3.9.9-eclipse-temurin-21-jammy AS BUILD_IMAGE
+		LABEL "Project" = "Vprofile"
+		LABEL "Author" = "Meenal"
+		RUN git clone https://github.com/hkhcoder/vprofile-project.git
+		RUN cd vprofile-project && git checkout containers && mvn install
+
+		FROM tomcat:10-jdk21
+		RUN rm -rf /usr/local/tomcat/webapps/*
+		COPY --from=BUILD_IMAGE vprofile-project/target/vprofile-v2.war /usr/local/tomcat/webapps/ROOT.war
+
+		EXPOSE 8080
+		CMD ["catalina.sh","run"]
+	4.2 db(Mysql) - Dockerfile.yaml
+		FROM mysql:8.0.33
+		LABEL "Project" = "Vprofile"
+		LABEL "Author" = "Meenal"
+
+		ENV MYSQL_ROOT_PASSWORD = "vprodbpass"
+		ENV MYSQL_DATABASE = "accounts"
+
+		ADD db_backup.sql docker-entrypoint-initdb.d/db_backup.sql
+	4.3 web(Nginx) - Dockerfile.yaml
+		FROM nginx
+		LABEL "Project" = "Vprofile"
+		LABEL "Author" = "Meenal"
+
+		RUN rm -rf /etc/nginx/conf.d/default.conf
+		COPY nginvproapp.conf /etc/nginx/conf.d/vproapp.conf
+		
+5. Create docker-compose.yaml
+	version: '3.8'
+	services:
+	  vprodb:
+		build:
+		  context: ./Docker-files/db
+		image: meenalmate/vprofiledb-docker
+		container_name: vprodb
+		ports:
+		  - "3306:3306"
+		volumes:
+		  - vprodbdata:/var/lib/mysql
+		environment:
+		  - MYSQL_ROOT_PASSWORD=vprodbpass
+		
+	  vprocache01:
+		image: memcached
+		container_name: vprocache01
+		ports:
+		  - "11211:11211"
+
+	  vpromq01:
+		image: rabbitmq
+		container_name: vpromq01
+		ports:
+		  - "5672:5672"
+		environment:
+		  - RABBITMQ_DEFAULT_USER=guest
+		  - RABBITMQ_DEFAULT_PASS=guest
+
+	  vproapp:
+		build:
+		  context: ./Docker-files/app
+		image: meenalmate/vprofileapp-docker
+		container_name: vproapp
+		ports:
+		  - "8080:8080"
+		volumes:
+		  - vproappdata:/usr/local/tomcat/webapps
+
+	  vproweb:
+		build:
+		  context: ./Docker-files/web
+		image: meenalmate/vprofileweb-docker
+		container_name: vproweb
+		ports:
+		  - "80:80"
+
+	volumes:
+	  vprodbdata: {}
+	  vproappdata: {}
+	   
+6. Build and Run
+	6.1 Copy Docker-files folder and docker-compose.yaml file in vagrant folder.
+	6.2 vagrant up
+	6.3 vagrant ssh 
+	6.4 cd /vagrant/
+	6.5 docker compose build
+	6.6 docker images
+	6.7 docker compose up -d /docker compose down
+	6.8 docker ps //list container ids
+	6.9 ip addr show - copy ip and check in browser http://0.0.0.0:80
+	
+7. Deploy Docker images in Docker Hub
+	7.1 docker login // Login to dockerhub
+	7.2 docker push <imagename/repositoryname> for app,db,web
+
+8. Clean up	
+	8.1 cd /vagrant/ // go to docker-compose.yaml file folder
+	8.2 docker compose down
+	8.3 docker volume ls
+	8.4 docker volume rm <volumnename1> <volumename2>  / docker volume prune
+	8.5 docker system prune -a // remove all docker images container or caches.
+
+
+
+

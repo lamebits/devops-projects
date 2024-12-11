@@ -1,0 +1,52 @@
+1. Login AWS account and create EC2 instance for Jenkins on ubuntu machine.
+2. EC2 Advance Setting
+	#!/bin/bash
+	sudo apt update
+	sudo apt install openjdk-17-jdk -y
+	sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+	https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+    https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+    /etc/apt/sources.list.d/jenkins.list > /dev/null
+    sudo apt-get update
+    sudo apt-get install jenkins -y 
+3. Jenkins Installation and setup
+	3.1 SSh to Jenkins and verify jenkins installtion or copy public IP of EC2 instance and check in browser as 0.0.0.0:8080
+	3.2 Check K=Jenkins running status using following command
+		systemctl status jenkins
+	3.3 cd /var/lib/jenkins/
+	3.4 cat <path> mentioned in Jenkins browser
+	3.5 Copy and paste the password in Jenkins browser.
+4. Tools in Jenkins
+	4.1 ssh to machine
+	4.2 sudo apt update
+	4.3 sudo apt install openjdk-8-jdk -y
+	4.4 ls /usr/lib/jvm
+	4.5 copy path "/usr/lib/jvm/java-1.8.0-openjdk-amd64" and paste it into Jenkins Tools configuration.
+	4.6 Select Maven installation.
+5. Manage Plugins in Jenkins
+	5.1 Enable Pipeline Utility Steps
+	5.2 Pipeline Maven Integration
+	5.3 Create New Item
+		PipelineCode
+			pipeline{
+			agent any
+			stages{
+				stage('Fetch Code'){
+					steps{
+						git branch: 'paac', url: 'https://github.com/devopshydclub/vprofile-project.git' 
+					}
+				}
+				stage('Build'){
+					steps{
+						sh 'mvn install'
+					}
+				}
+				stage('Test'){
+					steps{
+						sh 'mvn test'
+					}
+				}
+			}
+		}
+	5.4 

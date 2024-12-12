@@ -22,6 +22,18 @@ pipeline{
 					sh 'mvn -s settings.xml -DskipTests install'
 				}
 			}
+			post{
+				success{
+					echo "Archiving...."
+					archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack\vprofile-project-ci-jenkins/target/*war'
+				}
+			}
+		}
+		stage('Test'){
+			sh 'mvn test'
+		}
+		stage('Checkstyle Analysis'){
+			sh 'mvn checkstyle:checkstyle'
 		}
 	}
 }

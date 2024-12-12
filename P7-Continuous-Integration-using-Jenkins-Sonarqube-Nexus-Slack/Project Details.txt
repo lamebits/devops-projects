@@ -76,52 +76,107 @@
 		6.5.1 Jenkins -> Credentials -> username,Password and ID(nexuslogin)
 	6.6 Write PipelineCode
 		pipeline{
-				agent any
-				tools{
-					maven "MAVEN3"
-					jdk "OracleJDK8"
-				}
-				environment{
-					NEXUS_LOGIN = 'nexuslogin'
-					NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
-					NEXUSPORT = '8081'
-					NEXUS_USER = 'admin'
-					NEXUS_PASS = 'admin'
-					CENTRAL_REPO = 'vpro-maven-central'
-					RELEASE_REPO = 'vprofile-release'
-					SNAP_REPO = 'vprofile-snapshot'
-					NEXUS_GRP_REPO = 'vpro-maven-group'
-				}
-				stages{
-					stage('Build'){
-						steps{
-							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
-								sh 'mvn -s settings.xml -DskipTests install'
-							}
-						}
-						post{
-							success{
-								echo "Archiving...."
-								archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins/target/*war'
-							}
+			agent any
+			tools{
+				maven "MAVEN3"
+				jdk "OracleJDK8"
+			}
+			environment{
+				NEXUS_LOGIN = 'nexuslogin'
+				NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
+				NEXUSPORT = '8081'
+				NEXUS_USER = 'admin'
+				NEXUS_PASS = 'admin'
+				CENTRAL_REPO = 'vpro-maven-central'
+				RELEASE_REPO = 'vprofile-release'
+				SNAP_REPO = 'vprofile-snapshot'
+				NEXUS_GRP_REPO = 'vpro-maven-group'
+				SONARSERVER = 'sonarserver'
+				SONARSCANNER = 'sonarscanner'
+			}
+			stages{
+				stage('Build'){
+					steps{
+						//dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+							sh 'mvn -s settings.xml -DskipTests install'
+						//}
+					}
+					post{
+						success{
+							echo "Archiving...."
+							archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins/target/*war'
 						}
 					}
-					stage('Test'){
-						steps{
-							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
-								sh 'mvn -s settings.xml test'
-							}
+				}
+				stage('Test'){
+					steps{
+						//dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+							sh 'mvn -s settings.xml test'
+						//}
+					}
+				}
+				stage('Checkstyle Analysis'){
+					steps{
+						//dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+							sh 'mvn -s settings.xml checkstyle:checkstyle'
+						//}
+					}
+				}
+				stage('Sonar Analysis') {
+					environment {
+						scannerHome = tool "${SONARSCANNER}"
+					}
+					steps {
+					   withSonarQubeEnv("${SONARSERVER}") {
+						   sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
+						   -Dsonar.projectName=vprofile \
+						   -Dsonar.projectVersion=1.0 \
+						   -Dsonar.sources=src/ \
+						   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+						   -Dsonar.junit.reportsPath=target/surefire-reports/ \
+						   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+						   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+					  }
+					}
+				}
+				stage("Quality Gate") {
+					steps {
+						timeout(time: 1, unit: 'HOURS') {
+							// Parameter indicates whether to set pipeline to UNSTABLE if Quality Gate fails
+							// true = set pipeline to UNSTABLE, false = don't
+							waitForQualityGate abortPipeline: true
 						}
 					}
-					stage('Checkstyle Analysis'){
-						steps{
-							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
-								sh 'mvn -s settings.xml checkstyle:checkstyle'
-							}
-						}
+				}
+				stage("UploadArtifact"){
+					steps{
+						nexusArtifactUploader(
+						  nexusVersion: 'nexus3',
+						  protocol: 'http',
+						  nexusUrl: "${NEXUSIP}:${NEXUSPORT}",
+						  groupId: 'QA',
+						  version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+						  repository: "${RELEASE_REPO}",
+						  credentialsId: "${NEXUS_LOGIN}",
+						  artifacts: [
+							[artifactId: 'vproapp',
+							 classifier: '',
+							 file: 'target/vprofile-v2.war',
+							 type: 'war']
+						  ]
+						)
 					}
 				}
 			}
+			post {
+				always {
+					echo 'Slack Notifications.'
+					slackSend channel: '#jenkinscicd',
+						color: COLOR_MAP[currentBuild.currentResult],
+						message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+				}
+			}
+		}
 		6.6.1 Commit and push the code in Git
 		6.6.2 Create job in jenkins
 			6.6.2.1 Name: vprofile-ci-pipeline
@@ -146,7 +201,35 @@
 		8.2.3 Open Sonar Account -> Security -> Generate Token "4	4d704bdd8a0f4b9115779abbbfffa90664ea904"
 	    8.2.4 Add Token and select -> Save	
 		8.2.5 Manage Jenkins -> Tools -> SonarQube Scanner (sonarscanner)
-10. Nexus Artifact upload stage
-11. Slack Notification
+		8.2.6 Setup quality gates
+			8.2.6.1 Quality gate -> Bugs > 25
+			8.2.6.2 Attach the quality gates with project.
+		8.2.7 Create Webhook to communicate with jenkins	
+			8.2.7.1 Go to Project Setting
+			8.2.7.2 Name: jenkinswebhook
+			8.2.7.3 http://<Private Jenkins IP>:8080/sonarqube-webhook
+		8.2.8 Commit code into github -> SonarQube communicate regarding quality gate if error occurs > 25 it will abort the job.
+9. Nexus Artifact upload stage
+	9.1 Open Jenkins -> System -> Build Timestamp
+	9.2 Edit Pipeline Code with Upload Artifact.
+	9.3 Commit and push -> Jenkins build Job trigger and artifact store in Nexus.
+
+10. Slack Notification
+	10.1 sign-in in Slack
+	10.2 create workspace (vprofile-cicd-notify)
+	10.3 Create channel (jenkinscicd)
+	10.4 Add app to jenkins account
+		10.4.1 Search Slack app in jenkins
+		10.4.2 Add to slack
+		10.4.3 Add jenkinscicd channel 
+		10.4.4 copy step3 Integration token credential id "CEWytVmF4BhKXeol4RyIBOFl"
+	10.5 Open Jenkins -> Manage Jenkins -> Tools -> Slack
+		10.5.1 workspace name vprofilecicd
+		10.5.2 paste secreat key
+		10.5.3 slacktoken
+	10.6 Modify Pipeline Code
+	10.7 Commit and Push
+	10.8 Jenkins Build Job automatically
+	10.9 Success/Failure notification received in Slack.
 
 	

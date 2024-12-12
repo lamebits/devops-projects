@@ -75,7 +75,43 @@
 	6.5 Add Nexus Credential in Jenkins
 		6.5.1 Jenkins -> Credentials -> username,Password and ID(nexuslogin)
 	6.6 Write PipelineCode
-	
+		pipeline{
+			agent any
+			tools{
+				mvn "MAVEN3"
+				jdk "OracleJDK8"
+			}
+			environment{
+				NEXUS_LOGIN = 'nexuslogin'
+				NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
+				NEXUSPORT = '8081'
+				NEXUS-USER = 'admin'
+				NEXUS-PASS = 'admin'
+				CENTRAL-REPO = 'vpro-maven-central'
+				RELEASE-REPO = 'vprofile-release'
+				SNAP-REPO = 'vprofile-snapshot'
+				NEXUS-GRP-REPO = 'vpro-maven-group'
+			}
+			stages{
+				stage('Build'){
+					steps{
+						sh 'mvn -s setting.xml -DskipTests install'
+					}
+				}
+			}
+		}
+		6.6.1 Commit and push the code in Git
+		6.6.2 Create job in jenkins
+			6.6.2.1 Name: vprofile-ci-pipeline
+			6.6.2.2 Pipeline script from SCM
+				id = githublogin
+				kind = SSH user with private key
+				username = id
+				paste private key "ssh-keygen"
+			6.6.2.3 SSh to jenkins EC2 
+				su - jenkins
+				git ls-remote -h <git repo ssh url> HEAD  // will reomve repository url error from the jenkins
+			6.6.2.4 Script Path and Branch
 8. GitHub Webhook
 9. Sonarqube server integration stage
 10. Nexus Artifact upload stage

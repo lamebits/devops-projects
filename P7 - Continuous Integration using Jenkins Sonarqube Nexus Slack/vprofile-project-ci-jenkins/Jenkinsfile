@@ -8,12 +8,12 @@ pipeline{
 		NEXUS_LOGIN = 'nexuslogin'
 		NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
 		NEXUSPORT = '8081'
-		NEXUS-USER = 'admin'
-		NEXUS-PASS = 'admin'
-		CENTRAL-REPO = 'vpro-maven-central'
-		RELEASE-REPO = 'vprofile-release'
-		SNAP-REPO = 'vprofile-snapshot'
-		NEXUS-GRP-REPO = 'vpro-maven-group'
+		NEXUS_USER = 'admin'
+		NEXUS_PASS = 'admin'
+		CENTRAL_REPO = 'vpro-maven-central'
+		RELEASE_REPO = 'vprofile-release'
+		SNAP_REPO = 'vprofile-snapshot'
+		NEXUS_GRP_REPO = 'vpro-maven-group'
 	}
 	stages{
 		stage('Build'){

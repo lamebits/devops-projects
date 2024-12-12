@@ -1,0 +1,84 @@
+1. Login to AWS Account
+2. Create Key Pair - vprofile-ci-key.pem
+3. Create Security Group
+	3.1 Jenkins(jenkins-sg) - 22-MyIP, 8080-IPV4, 8080-IPV6 - 8080-sonar-sg(response back)
+	3.2 Nexus(nexus-sg) - 22-MyIP, 8081-MyIP, 8081-jenkins-sg
+	3.3 Sonarqube(sonar-sg) - 22-MyIP, 80-MyIP, 80-jenkins-sg
+4. Create EC2 Instance with userdata
+	4.1 Jenkins EC2 Instance [JenkinsServer] Ubuntu
+		#!/bin/bash
+		sudo apt update
+		sudo apt install openjdk-17-jdk -y
+		sudo apt install maven wget unzip -y
+
+		sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+		https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+		echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+		https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+		/etc/apt/sources.list.d/jenkins.list > /dev/null
+
+		sudo apt-get update
+		sudo apt-get install jenkins -y
+		4.1.1 ssh to jenkins machine "ssh -i vprofile-ci-key.pem ubuntu@18.220.114.135"
+		4.1.2 cat .ssh/known_hosts: It has store the current session of password.
+		4.1.3 ls /usr/lib/jvm: shows list of all java version
+		4.1.4 ls /var/lib/jenkins: show jenkins files.
+		4.1.5 check public IP of Jenkins in browser "http://<IP>:8080"
+		4.1.6 cat path mentioned in jenkins browser page
+		4.1.7 paste the paswword
+		4.1.8 set configurations : http://18.220.114.135:8080/
+		4.1.9 Install Plugin :
+				maven Integration
+				GitHub Integration
+				Nexus Artifact Uploader
+				SonarQube Scanner
+				Slack Notification
+				Build Timestamp
+	4.2 Nexus EC2 Instance [NexusServer] - Centos9
+		4.2.1 Ssh Login "ssh -i vprofile-ci-key.pem ec2-user@3.21.248.228"
+		4.2.2 Open nexus in browser http://<IP>:8081
+		4.2.3 SignIn to Nexus
+			4.2.3.1 Create repository [vprofile-release] in maven2 hosted //while action the maven dependencies
+			4.2.3.2 Create repository [vpro-maven-central] in maven2 proxy, url: "https://repo1.maven.org/maven2/" // store the dependencies/artifact
+			4.2.3.3 Create repository [vprofile-snapshot] in maven2 hosted, version policy: snapshot
+			4.2.3.4 Create repository [vpro-maven-group] add all repository
+			
+	4.3 Sonarqube EC2 Instance [SonarServer]- Ubuntu
+		4.3.1 Login to Sonar.
+
+5. Git
+	5.1 Create github repository and migrant code
+		5.1.1 SSH Login
+				git config --global user.email "meenalmate1663@gmail.com"
+				git config --global user.name "lamebits"
+				cat ~/.gitconfig
+				ssh-keygen
+				cat public key 
+				Copy public key
+				Go to Github setting -> Ssh and GPK Keys -> Add the SSH key
+				Go to "https://github.com/hkhcoder/vprofile-project" and fork into our github account.
+				
+	5.2  Integrate github repo with VSCode and test it
+
+6. Build Job with Nexus Integration
+	6.1 Open Jenkins -> Manage Jenkins -> Tools
+	6.2 Ssh to Jenkins copy path of all java version "ls /usr/lib/jvm"
+	6.3 Add JDK
+		6.3.1 OracleJDK8
+			/usr/lib/jvm/java-8-openjdk-amd64
+		6.3.2 OracleJDK11
+			/usr/lib/jvm/java-11-openjdk-amd64
+		6.3.3 OracleJDK17
+			/usr/lib/jvm/java-17-openjdk-amd64
+	6.4 Add Maven
+		MAVEN3 - 3.9.5
+	6.5 Add Nexus Credential in Jenkins
+		6.5.1 Jenkins -> Credentials -> username,Password and ID(nexuslogin)
+	6.6 Write PipelineCode
+	
+8. GitHub Webhook
+9. Sonarqube server integration stage
+10. Nexus Artifact upload stage
+11. Slack Notification
+
+	

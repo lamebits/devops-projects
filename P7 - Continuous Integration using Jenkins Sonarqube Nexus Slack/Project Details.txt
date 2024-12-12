@@ -112,6 +112,7 @@
 				su - jenkins
 				git ls-remote -h <git repo ssh url> HEAD  // will reomve repository url error from the jenkins
 			6.6.2.4 Script Path and Branch
+		6.6.3 Build the job.
 8. GitHub Webhook
 9. Sonarqube server integration stage
 10. Nexus Artifact upload stage

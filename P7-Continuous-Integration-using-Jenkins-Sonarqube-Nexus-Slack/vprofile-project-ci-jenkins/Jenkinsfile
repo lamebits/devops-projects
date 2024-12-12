@@ -31,12 +31,16 @@ pipeline{
 		}
 		stage('Test'){
 			steps{
-				sh 'mvn test'
+				dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+					sh 'mvn test'
+				}
 			}
 		}
 		stage('Checkstyle Analysis'){
 			steps{
-				sh 'mvn checkstyle:checkstyle'
+				dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+					sh 'mvn checkstyle:checkstyle'
+				}
 			}
 		}
 	}

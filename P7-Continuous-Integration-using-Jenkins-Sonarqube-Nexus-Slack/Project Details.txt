@@ -76,32 +76,52 @@
 		6.5.1 Jenkins -> Credentials -> username,Password and ID(nexuslogin)
 	6.6 Write PipelineCode
 		pipeline{
-			agent any
-			tools{
-				mvn "MAVEN3"
-				jdk "OracleJDK8"
-			}
-			environment{
-				NEXUS_LOGIN = 'nexuslogin'
-				NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
-				NEXUSPORT = '8081'
-				NEXUS-USER = 'admin'
-				NEXUS-PASS = 'admin'
-				CENTRAL-REPO = 'vpro-maven-central'
-				RELEASE-REPO = 'vprofile-release'
-				SNAP-REPO = 'vprofile-snapshot'
-				NEXUS-GRP-REPO = 'vpro-maven-group'
-			}
-			stages{
-				stage('Build'){
-					steps{
-						dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
-							sh 'mvn -s settings.xml -DskipTests install'
-						}	
+				agent any
+				tools{
+					maven "MAVEN3"
+					jdk "OracleJDK8"
+				}
+				environment{
+					NEXUS_LOGIN = 'nexuslogin'
+					NEXUSIP = '172.31.27.32' // Nexus EC2 Private IP
+					NEXUSPORT = '8081'
+					NEXUS_USER = 'admin'
+					NEXUS_PASS = 'admin'
+					CENTRAL_REPO = 'vpro-maven-central'
+					RELEASE_REPO = 'vprofile-release'
+					SNAP_REPO = 'vprofile-snapshot'
+					NEXUS_GRP_REPO = 'vpro-maven-group'
+				}
+				stages{
+					stage('Build'){
+						steps{
+							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+								sh 'mvn -s settings.xml -DskipTests install'
+							}
+						}
+						post{
+							success{
+								echo "Archiving...."
+								archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins/target/*war'
+							}
+						}
+					}
+					stage('Test'){
+						steps{
+							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+								sh 'mvn -s settings.xml test'
+							}
+						}
+					}
+					stage('Checkstyle Analysis'){
+						steps{
+							dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+								sh 'mvn -s settings.xml checkstyle:checkstyle'
+							}
+						}
 					}
 				}
 			}
-		}
 		6.6.1 Commit and push the code in Git
 		6.6.2 Create job in jenkins
 			6.6.2.1 Name: vprofile-ci-pipeline
@@ -116,9 +136,16 @@
 			6.6.2.4 Script Path and Branch
 		6.6.3 Build the job.
 7. GitHub Webhook
-	7.1 Open Github -> Repository Setting -> Webhook and add "http://http://<Jenkins IP>:8080/github-webhook/" -> application-json
+	7.1 Open Github -> Repository Setting -> Webhook and add "http://<Jenkins IP>:8080/github-webhook/" -> application-json
 	7.2 Open Jenkins -> project configuration -> Enable GitHub hook trigger for GITScm polling
-9. Sonarqube server integration stage
+8. Sonarqube server integration stage
+	8.1 Open Jenkins -> Manage Jenkins -> System
+	8.2 Add Sonar details
+		8.2.1 Name: sonarserver //Environment Name
+		8.2.2 url: http://<IP> //Private IP of Sonar EC2 Instance
+		8.2.3 Open Sonar Account -> Security -> Generate Token "4	4d704bdd8a0f4b9115779abbbfffa90664ea904"
+	    8.2.4 Add Token and select -> Save	
+		8.2.5 Manage Jenkins -> Tools -> SonarQube Scanner (sonarscanner)
 10. Nexus Artifact upload stage
 11. Slack Notification
 

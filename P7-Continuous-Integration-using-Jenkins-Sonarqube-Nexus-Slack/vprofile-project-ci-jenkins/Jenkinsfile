@@ -18,7 +18,9 @@ pipeline{
 	stages{
 		stage('Build'){
 			steps{
-				sh 'mvn -s P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins/settings.xml -DskipTests install'
+				dir('P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins'){
+					sh 'mvn -s settings.xml -DskipTests install'
+				}
 			}
 		}
 	}

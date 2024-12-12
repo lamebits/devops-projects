@@ -25,7 +25,7 @@ pipeline{
 			post{
 				success{
 					echo "Archiving...."
-					archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack\vprofile-project-ci-jenkins/target/*war'
+					archiveArtifacts artifacts: 'P7-Continuous-Integration-using-Jenkins-Sonarqube-Nexus-Slack/vprofile-project-ci-jenkins/target/*war'
 				}
 			}
 		}

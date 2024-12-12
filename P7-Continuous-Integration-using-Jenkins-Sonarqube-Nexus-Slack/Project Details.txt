@@ -118,7 +118,6 @@
 7. GitHub Webhook
 	7.1 Open Github -> Repository Setting -> Webhook and add "http://http://<Jenkins IP>:8080/github-webhook/" -> application-json
 	7.2 Open Jenkins -> project configuration -> Enable GitHub hook trigger for GITScm polling
-
 9. Sonarqube server integration stage
 10. Nexus Artifact upload stage
 11. Slack Notification

@@ -216,10 +216,10 @@
 
 10. Slack Notification
 	10.1 sign-in in Slack
-	10.2 create workspace (vprofile-cicd-notify)
+	10.2 Create workspace (vprofile-cicd-notify)
 	10.3 Create channel (jenkinscicd)
 	10.4 Add app to jenkins account
-		10.4.1 Search Slack app in jenkins
+		10.4.1 Search Slack app in jenkins in browser
 		10.4.2 Add to slack
 		10.4.3 Add jenkinscicd channel 
 		10.4.4 copy step3 Integration token credential id "CEWytVmF4BhKXeol4RyIBOFl"

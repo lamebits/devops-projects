@@ -1,0 +1,127 @@
+1. Follow steps of Continuous Integration on AWS - Project-8. 
+2. Create ElasticBeanStalk for deploying Java Application.
+	2.1 ApplicationName: vprofile-app-v1
+	2.2 EnvironmentName: vprofile-app-v1-envprod
+	2.3 Domain: vprofile-app-v1-envprod
+	2.4 Platofrm: Tomcat
+	2.5 Configuration: Custom
+	2.6 Select exisiting Service Role: aws-elasticbeanstalk-service-role
+	2.7 EC2 KeyPair
+	2.8 EC2 Instance Profile
+	2.9 Select default VPC
+	2.10 Public IP Address : Activated
+	2.11 Select all availability zone
+	2.12 Capacity : Load Balance
+	2.13 Select t3.micro
+	2.14 Processes -> Edit -> Enabled Session stickiness
+	2.15 Deployment Policy: Rolling
+	2.16 Deployement Batch Size : 50
+3. RDS Setup
+	3.1 Create Database -> Standard Create -> Mysql
+	3.2 Templates: Free Tier
+	3.3 DB Instance Identifier: vprofile-cicd-project
+	3.4 Master username: admin
+	3.5 Self managed
+	3.6 Select Auto generated password
+	3.7 Create New VPC: vprofile-cicd-rds-mysql-sg
+	3.8 Database name: accounts
+	3.9 Copy Master username and Master Password (adOEX4d-----58QwhtZU)
+	3.10 Wait for avaliable status and copied End Point "vprofile-cicd-project.----------us-east-2.rds.amazonaws.com"
+	3.11 Edit Security group "vprofile-cicd-rds-mysql-sg" and allow MYSQL-Aurora -> 3306 -> "elasticbeanstalk security group"
+
+4. DB Initialization
+	4.1 SSh login
+		4.1.1 using launch EC@ instance ec2-user@ public IP 
+	4.2 Go to security group for AWS SecurityGroup -> ssh -> 22 -> MyIP
+	4.3 dnf install mariadb105
+	4.4 connect mariadb to RDS	
+		4.4.1 mysql -h <RDS EndPoint> -u admin -p<password> accounts(dbname) 
+	4.5 Execute Mysql command
+		4.5.1 wget url of db_backup.sql open in github raw format for cd-aws branch.
+	4.6 show tables
+	
+5. Change CodeArtifact URL in Pom and settings xml files.
+	5.1 Goto Code Artifact	
+	5.2 Open maven-central-store- > View Connection -> copy url
+	5.3 goto bitbucket cd-aws branch and replace url in pom.xml and setting.xml files.
+	
+6. Code Build
+	6.1 Change branch cd-aws in already create code build i.e vprofile-build-artifact and vpro-code-analysis
+	6.2 copy servicename: codebuild14-vprofile-build-artifact-service-role
+	6.3 Copy code artifact -> maven-central-store -url in all buildspec.yml files.
+	6.4 edit CodeBuild -> vpro-code-build -> change buildspec file path "aws-files/sonar_buildspec.yml"
+	6.5 Add RDS-EndPoint, RDSUSER and RDSPASS Parameter in AWS Parameter Store
+	6.6 Create CodeBuild
+		6.6.1 Name : vprofile-BuildandRelease
+		6.6.2 Source Provider: BitBucket
+			  Source Version: cd-aws
+		6.6.3 OS: Ubuntu
+		6.6.4 Existing Service Role: arn:aws:iam::022499024066:role/service-role/codebuild13-vpro-code-analysis-service-role
+		6.6.5 Use a buildspec file "aws-files/buildAndRelease_buildspec.yml"
+		6.6.6 CloudWatch:
+			6.6.6.1 GroupName: vprofile-ohio-codebuild
+			6.6.6.2 StreamName: BuildAndRelease
+	6.7 Start Build
+	
+7. Software Testing Job
+	7.1 BuildJob Service Role Name
+		arn:aws:iam::000000000:role/service-role/codebuild13-vpro-code-analysis-service-role
+	7.2 S3 Bucket Name: vprofile-cicd-selenium13
+	7.3 CloudWatch log groupname: vprofile-ohio-codebuild
+	7.4 BeanStalk Endpoint URL(Domain): vprofile-app-envprod.us-east-2.elasticbeanstalk.com
+	7.5 Create CodeBuild
+		7.5.1 Name : SoftwareTesting
+		7.5.2 Source Provider: BitBucket
+			  Source Version: seleniumAutoScripts
+		7.5.3 OS: Windows Server
+		7.5.4 Existing Service Role: arn:aws:iam::000000000:role/service-role/codebuild13-vpro-code-analysis-service-role
+		7.5.5 Select insert build command(copy cmaands from branch cd-aws win_buildspec.yml)
+		7.5.6 Type : Amazon S3
+		      Bucketname: vprofile-cicd-selenium13
+			  Aritfact packaging = .zip
+		7.5.7 CloudWatch:
+			7.5.7.1 GroupName: vprofile-ohio-codebuild
+			7.5.7.2 StreamName: TestSuits
+	7.6 Start Build
+
+8. AWS CodePipeline
+	8.1 Name: vprofile-cicd-pipeline
+	8.2 RoleName: AWSCodePipelineServiceRole-us-east-2-vprofile-cicd-pipeline13
+	8.3 Source Provider: BitBucket
+	8.4 Select Connection,Repository, Branch: cd-aws
+	8.5 Select: other build provider
+		8.5.1 AWS Codebuild
+		8.5.2 ProjectName: vprofile-BuildandRelease
+		8.5.3 Input Artifact: SourceArtifact
+		8.5.4 Deploy Provider: AWS Elastic Beanstalk
+		8.5.5 Application Name: vprofile-app-envprod
+		8.5.6 EnvironmentName: vprofile-app-v2-envprod
+		8.5.7 Create Pipeline and stop
+	8.6 Add Stages
+		8.6.1 Add CodeAnalysis before Build Stage
+			  ActionName: CodeAnalysis
+			  Action Provider: AWS CodeBuild
+			  Input Artifact: SourceArtifact
+			  Projectname: vpro-code-analysis
+		8.6.2 Add BuildAndStore before Build Stage
+			  ActionName: BuildAndStore 
+			  Action Provider: AWS CodeBuild
+			  Input Artifact: SourceArtifact
+			  Projectname: vprofile-build-artifact
+			  Output artifacts: BuildArtifact
+		8.6.3 Add DeployToS3 before Build Stage
+			  ActionName: DeployToS3 
+			  Action Provider: Amazon S3
+			  BucketName: vprofile13-build-artifact
+			  Input Artifact: BuildArtifact
+			  Extract file before deploy
+		8.6.4 Build
+		8.6.5 Deploy
+		8.6.6 SoftwareTesting
+			  Add SoftwareTesting After Deploy Stage
+			  ActionName: SoftwareTesting 
+			  Action Provider: AWS CodeBuild
+			  Input Artifact: SourceArtifact
+			  ProjectName: SoftwareTesting
+			  
+9. Copy Elasticbeanstalk EndPoint(Domain) URL in browser for verification.

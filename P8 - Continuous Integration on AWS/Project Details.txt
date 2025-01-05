@@ -51,9 +51,9 @@
 		2.1.1 Name - vprofile-maven-repo
 		2.1.2 Public Upstream Repository - maven-central-store
 		2.1.3 Select "This AWS account"
-		2.1.4 DomainName - vprofile-maven-repo
-	2.2 Look at the settings for pom.xml & settings.xml // all the code artifact connection details are mentioned.
-	2.3 Undersatnd buildspec.yml file for code analysis build job	// build_buildspec.yml and sonar_buildspec.yml 
+		2.1.4 DomainName - awsdevops
+	2.2 Look at the settings for pom.xml & settings.xml for ci-aws branch// all the code artifact connection details are mentioned.
+	2.3 Understand buildspec.yml file for code analysis build job	// build_buildspec.yml and sonar_buildspec.yml 
 3. Sonar Cloud setup
 	3.1 SonarCloud login using Github.
 	3.2 My account -> security -> Generate Keyname	
@@ -69,7 +69,7 @@
 			4.1.1.1 Go to Parameter Store in AWS System Manager
 			4.1.1.2 Create Parameter
 	4.2 Mention parameter store details in buildspec.yml file
-		4.2.1 LOGIN : 408e1b968e33e35af704003118338fd3376aaa5c
+		4.2.1 LOGIN : 408e1b968e33-------18338fd3376aaa5c
 		4.2.2 HOST : https://sonarcloud.io
 		4.2.3 Organisation: awsvpro
 		4.2.4 Project : awsvpro-project
@@ -138,7 +138,7 @@
 		6.2.12 Assign Policy "AWSCodeArtifactReadOnlyAccess" to Role.
 		6.2.13 Start build form CodeBuild.
 	6.3 Create S3 Bucket
-		6.3.1 BucketName - vprofile-build-artifact
+		6.3.1 BucketName - vprofile13-build-artifact
 		6.3.2 FolderName - pipeline-artifact
 
 7. Code Pipeline
@@ -146,6 +146,7 @@
 		7.1 Select Standard
 		7.2 Name - vprofile-pipeline-notifications
 		7.3 Create Subcription for email notifications
+		7.4 Check Email for confirmation
 	7.2 Create AWS CodePipeline
 		7.2.1 Create Pipeline Name - vprofile-build-pipeline
 		7.2.2 Source Provider - Bitbucket
@@ -157,9 +158,10 @@
 		7.2.7 Add Stage before Build for Pipeline	
 			7.2.7.1 Add stages for sonarCodeAnalysis -> AWS CodeBuild -> Select vpro-code-analysis->Done
 		7.2.8 Add stage for S3 Deploy
-			7.2.8.1 Add stages for S3 Deploy -> DeployToS3 -> Amazon S3 -> Select Input Artifact(BuildArtifact) -> S3 Object Key(pipeline-artifact)-> Extract before deploy->done
+			7.2.8.1 Add stages for S3 Deploy -> DeployToS3 -> Amazon S3 -> Select Input Artifact(BuildArtifact) -> S3 Object Key(pipeline-artifact(Bucket foldername))-> Extract before deploy->done
 	7.3 Pipeline Notification Setting
 		7.3.1 Goto Pipeline settins -> notification -> create notifications rule
 		7.3.2 Select event trigger notifications
 		7.3.3 Choose target(SNS notification) - vprofile-pipeline-notifications
+		7.3.4 Go to Pipeline and click on ReleaseChange
 8. Commit and push the code then automatically CodePipeline will trigger.

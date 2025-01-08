@@ -1,0 +1,272 @@
+1. Set up GitHub using SSH
+	1.1 Open Git bash
+	1.2 cd ~/.ssh
+	1.3 ssh-keygen
+	1.4 Name: give github account name
+	1.5 Copy public key
+	1.6 Github -> setting -> SSH and GPG Keys -> Add copied public key.
+	1.7 ssh -i ~/.ssh/lamebits -T git@github.com	// For Github authentication
+	1.8 Fork "https://github.com/lamebits/hprofile"
+	1.9 export GIT_SSH_COMMAND="ssh -i ~/.ssh/lamebits"
+	1.10 git clone git@github.com:lamebits/hprofile.git
+	1.11 unset GIT_SSH_COMMAND
+	1.12 git config core.sshCommand "ssh -i ~/.ssh/lamebits -F /dev/null"		// whenever git operation perform it will use ssh.
+	1.13 cat .git/config
+			[core]
+					repositoryformatversion = 0
+					filemode = false
+					bare = false
+					logallrefupdates = true
+					symlinks = false
+					ignorecase = true
+					sshCommand = ssh -i ~/.ssh/lamebits -F /dev/null
+			[remote "origin"]
+					url = git@github.com:lamebits/hprofile.git
+					fetch = +refs/heads/*:refs/remotes/origin/*
+			[branch "main"]
+					remote = origin
+					merge = refs/heads/main
+	1.14 Set username and email id for git configuration file
+		 git config user.name lamebits
+	     git config user.email meenalmate1663@gmail.com
+	1.15 Integrated with VSCode
+		1.15.1 Change README.md file -> Commit -> PUSH
+
+2. Create Workflow in Github Actions
+	2.1 Code Testing Job
+			name: HProfile Actions
+			on: workflow_dispatch
+			jobs:
+			  Testing:
+				runs-on: ubuntu-latest
+				steps:
+				  - name: Code Checkout
+					uses: actions/checkout@v4   // Fetch the code from the github repo
+
+				  - name: Maven test
+					run: mvn test
+
+				  - name: Checkstyle
+					run: mvn checkstyle:checkstyle
+		2.1.1 Commit and PUSH
+		2.1.2 trigger workflow from github.
+	2.2 Login to Sonar Cloud using Github
+		2.2.1 Create Organisation and project
+			OrganisationName: hprofile
+			Key: hprofile1307
+			ProjectName: actionscode
+			ProjectKey: hprofile1307_actionscode
+			url: https://sonarcloud.io
+		2.2.2 Click on previous version
+		2.2.3 Go to accounts -> security -> generate token -> copy token //f403c2b5dab511-------4285ac2950e439c
+		2.2.4 Goto Github and add secrets
+			2.2.4.1 Github -> hprofile repo -> settings -> Secrets and variables -> Actions
+			2.2.4.2 SONAR_URL: https://sonarcloud.io
+			2.2.4.3 SONAR_TOKEN: f403c2b5dab5------704285ac2950e439c
+			2.2.4.4 SONAR_ORGANIZATION: hprofile1307
+			2.2.4.5 SONAR_PROJECT: hprofile1307_actionscode			
+		2.2.5 Add SonarQube Code	
+		2.2.6 Commit -> Push -> Trigger
+		
+	2.3 Quality Gates
+		2.3.1 Create Qualitygates in organisation level
+		2.3.2 assign quality gate to project.
+		2.3.3 Commit -> Push -> Trigger
+		
+3. Build and Upload Image in AWS
+	3.1 AWS Setup	
+		3.1.1 Create IAM User for ECR and ECS policies
+			3.1.1.1 IAM username: gitactions
+			3.1.1.2 Policies: AmazonEC2ContainerRegistryFullAccess, AmazonECS_FullAccess
+			3.1.1.3 Generate Acces Key
+		3.1.2 Create ECR Repository
+			3.1.2.1 ECR Repo Name: actapp
+			3.1.2.2 Copy ECR URL: 022400004066.dkr.ecr.us-east-2.amazonaws.com
+		3.1.3 Create RDS and Initialize Database
+			3.1.3.1 Standard Create -> Mysql -> Free Tier
+			3.1.3.2 DB Instance Identifier: vprofileapp-actions
+			3.1.3.3 Credential Management -> self Managed -> Auto generate password
+			3.1.3.4 Create security group
+					Name: vprofileappRDS-actions-sg
+			3.1.3.5 Initial Database name: accounts
+			3.1.3.6 Create database and save master credentials : ZSdjA5dfjfjeedeP5YT6T9
+			3.1.3.7 Copy EndPoint: vprofileapp-actions.cvi0ms0c68nx.us-east-2.rds.amazonaws.com
+		3.1.4 Create temporary EC2 Instance to initial the RDS Database
+			3.1.4.1 InstanceName: mysqlclient
+			3.1.4.2 Os: Ubuntu
+			3.1.4.3 Create Key Pair: mysqlclient-key.pem
+			3.1.4.4 Create securitygroup: mysql-client-sg
+			3.1.4.5 MyIP : 22
+			3.1.4.6 Add "mysql-client-sg" security group rule into RDS security group "vprofileappRDS-actions-sg"
+			3.1.4.7 Login SSH "ssh -i mysqlclient-key.pem ubuntu@<EC2 Public IP>"
+				a. sudo -i
+				b. apt update && apt install mysql-client -y
+				c. login RDS
+					-> mysql -h vprofileapp-actions.cvi0ms0c68nx.us-east-2.rds.amazonaws.com -u admin -pZSdjA5meoATCrP5YT6T9 accounts
+					   mysql -h <RDS End Point> -u admin -p<RDS Password> <Database Name>
+				d. git clone https://github.com/hkhcoder/vprofile-project.git
+				e. cd vprofile-project
+				f. ls src/main/resources/db_backup.sql
+				g. Run SQL in RDS 
+					-> mysql -h vprofileapp-actions.cvi0ms0c68nx.us-east-2.rds.amazonaws.com -u admin -pZSdjA5meoATCrP5YT6T9 accounts < src/main/resources/db_backup.sql
+				h. Terminate the RDS EC2 Instance
+
+		3.1.5 Store IAM keys and RDS details in secret
+			3.1.5.1 Open github -> hprofile repo-> settings-> secret and variables -> action@master		
+				1. AWS_ACCESS_KEY_ID: IAM User Access key
+				2. AWS_SECRET_ACCESS_KEY: IAM user secret access key
+				3. AWS_ACCOUNT_ID: Store aws account id
+				4. REGISTRY: ECR URL
+				5. RDS_USER: RDS username
+				6. RDS_PASS: RDS Password
+			7. RDS_ENDPOINT: RDS Endpoint
+	3.2 Docker Build and Publish to ECR
+		3.2.1 github workflow code	
+		3.2.2 Commit-> Push -> trigger
+
+	3.3 ECS setup
+		3.3.1 Create ClusterName: vproapp-act
+				Select AWS Fargate Serverless
+		3.3.2 Create Task Definations
+			a. Name: vproapp-act-tdef
+			b. Launch Type: AWS Fargate
+		3.3.3 Container details
+			a. Name: vproapp
+			b. ImageName: 02249000066.dkr.ecr.us-east-2.amazonaws.com/actapp
+			c. Container Port: 8080
+			d. Port Name: vproapp-8080-tcp
+		3.3.4 Create and click on Task execution role: ecsTaskExecutionRole
+			a. Enable "AmazonECSTaskExecutionRolePolicy"
+			b. Add Permission -> Attach Policy
+			c. Enable "CloudWatchLogsFullAccess"
+		3.3.5  Create service
+			a. Goto Cluster -> Service -> create
+			b. Select Family as vproapp-act-tdef(Task definations name)
+			c. ServiceName: vproapp-act-svc
+			d. Uncheck "Use the Amazon ECS deployment circuit breaker"
+			e. Create securitygroup
+				a. Name: vproapp-act-svc-sg
+				b. HTTP -> 80 -> Anywhere
+				c. Custom TCP -> 8080 -> Anywhere
+			f. Select Application Load Balancer
+				a. Name: vproapp-act-elb
+				b. Target groupname: vproapp-act-tg
+				c. Health check Path: /login
+				d. created
+		3.3.6 Add "vproapp-act-svc" security group into RDS security group "vprofileappRDS-actions-sg" 
+		3.3.7 Once Service created successfully goto service target group for checking health status -> load balancer -> Check DNS Name copy and verify it into browser.								
+4. Deploy Image to ECS
+	4.1 Open task defination -> JSON -> Copy code
+	4.2 Paste code into aws-files-> taskdeffile.json of Hprofile project.
+	4.3 Code
+			name: HProfile Actions
+			on: [push, workflow_dispatch]		// Automatic trigger the workflow after pushing the code.
+			env:
+			  AWS_REGION: us-east-2
+			  ECR_REPOSITORY: actapp
+			  ECS_SERIVCE: vproapp-act-svc-1
+			  ECS_CLUSTER: vproapp-act
+			  ECS_TASK_DEFINATION: aws-files/taskdeffile.json
+			  CONTAINER_NAME: vproapp
+			jobs:
+			  Testing:
+				runs-on: ubuntu-latest
+				steps:
+				  - name: Code Checkout
+					uses: actions/checkout@v4
+
+				  - name: Maven test
+					run: mvn test
+
+				  - name: Checkstyle
+					run: mvn checkstyle:checkstyle
+
+				  - name: Set Java 11
+					uses: actions/setup-java@v3
+					with:
+					  distribution: 'temurin' 
+					  java-version: '11'
+				
+				  - name: Setup SonarQube
+					uses: warchant/setup-sonar-scanner@v7
+				
+				  - name: SonarQube Scan
+					run: sonar-scanner
+					   -Dsonar.host.url=${{ secrets.SONAR_URL }}
+					   -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+					   -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+					   -Dsonar.projectKey=${{ secrets.SONAR_PROJECT }}
+					   -Dsonar.sources=$GITHUB_WORKSPACE
+					   -Dsonar.sources=src/
+					   -Dsonar.junit.reportsPath=target/surefire-reports/ 
+					   -Dsonar.jacoco.reportsPath=target/jacoco.exec 
+					   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+					   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/
+
+				  - name: SonarQube Server Quality Gate check
+					id: sonarqube-quality-gate-check
+					uses: sonarsource/sonarqube-quality-gate-action@master
+					with:
+					  pollingTimeoutSec: 600
+					env:
+					  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+					  SONAR_HOST_URL: ${{ secrets.SONAR_URL }} 
+
+				  - name: "Example show SonarQube Server Quality Gate Status value"
+					run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+
+			  Build_and_Publish:
+				needs: Testing        # Complete Testing jobs first
+				runs-on: ubuntu-latest
+				steps:
+				  - name: Code Checkout
+					uses: actions/checkout@v4
+
+				  - name: Update application.properties file
+					run: |
+					  sed -i "s/^jdbc.username.$/jdbc.username\=${{ secrets.RDS.USER }}/" src/main/resources/application.properties
+					  sed -i "s/^jdbc.password.$/jdbc.password\=${{ secrets.RDS_PASS }}/" src/main/resources/application.properties
+					  sed -i "s/db01/${{ secrets.RDS_ENDPOINT }}/" src/main/resources/application.properties
+
+				  - name: upload image to ECR
+					uses: appleboy/docker-ecr-action@master
+					with:
+					  access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+					  secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+					  registry: ${{ secrets.REGISTRY }}
+					  repo: actapp
+					  region: ${{ env.AWS_REGION }}
+					  tags: latest, ${{ github.run_number }}
+					  daemon_off: false
+					  dockerfile: ./Dockerfile
+					  context: ./
+
+			  Deploy:
+				needs: Build_and_Publish
+				runs-on: ubuntu-latest
+				steps:
+				  - name: Code Checkout
+					uses: actions/checkout@v4
+
+				  - name: Configure AWS credentials
+					uses: aws-actions/configure-aws-credentials@v1
+					with:
+					  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+					  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+					  aws-region: ${{ env.AWS_REGION }}
+
+				  - name: Fill in the new image ID in the Amazon ECS task definition
+					id: task-def
+					uses: aws-actions/amazon-ecs-render-task-definition@v1
+					with:
+					  task-definition: ${{ ECS_TASK_DEFINATION }}
+					  container-name: ${{ CONTAINER_NAME }}
+					  image: ${{ secrets.REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.run_number }}
+
+				  - name: Deploy Amazon ECS task definition
+					uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+					with:
+					  task-definition: ${{ steps.task-def.outputs.task-definition }}
+					  service: ${{ ECS_SERIVCE }}
+					  cluster: ${{ ECS_CLUSTER }}
+					  wait-for-service-stability: true

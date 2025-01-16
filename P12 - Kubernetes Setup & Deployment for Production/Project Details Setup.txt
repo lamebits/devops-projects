@@ -1,0 +1,102 @@
+1. Open git bash
+2. git clone https://github.com/devopshydclub/vprofile-project.git
+3. cd vprofile-project
+4. git pull
+5. git chcekout kubernetes-setup
+
+6. Minikube Setup 
+	6.1 cd minikube
+	6.2  cat Minikube-commands.txt
+			## Dependency => Oracle VM Virtualbox
+			##To Setup Chocolaty
+			##Open powershell as administrator and execute below command
+			Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+			## If getting Error, Turn Off Your Anti Virus for a moment and try again.
+
+			## Install Minikube with chocolaty
+			## Close powershell and start again with admin
+
+			choco install minikube kubernetes-cli -y
+
+			##Execute to Setup Minikube cluster
+			minikube start
+		
+		execute above command on Powershell
+	6.3 check minikube start command in git bash it will start VM locally
+	6.4 kubectl get nodes
+	6.5 cat .kube/config or kubectl config view
+	6.6 check documentation for deployement and expose steps
+		a. https://minikube.sigs.k8s.io/docs/start/?arch=%2Fwindows%2Fx86-64%2Fstable%2F.exe+download
+		b. kubectl create deployment hello-minikube --image=kicbase/echo-server:1.0
+		c. kubectl expose deployment hello-minikube --type=NodePort --port=8080
+		d. kubectl get services hello-minikube
+		e. minikube service hello-minikube	or minikube service hello-minikube --url
+
+	6.7 kubectl get pod	// check status of running pods
+	6.8 kubectl get svc
+	6.9 kubectl delete svc <svc_name>
+	6.10 kubectl delete deploy <svc_name>
+	6.11 minikube stop
+	6.12 minikube delete
+
+7. Kubeadm for cluster setup	
+	7.1 cd kubeadm
+	7.2 read all files
+	7.3 vagrant up
+	7.4 vagrant ssh kubemaster
+	7.5 kubectl get nodes
+	7.6 sudo -i
+	7.7 kubectl create deployment hello-kubeadm --image=kicbase/echo-server:1.0
+	7.8 kubectl expose deployment hello-kubeadm --type=NodePort --port=8080
+	7.9 kubectl get pod
+	7.10 kubectl get deploy
+	7.11 kubectl get svc
+	7.12 kubectl describe pod <name>
+	
+8. Kops Setup
+	8.1 Domain for kubernetes DNS records : Godaddy
+	8.2 Create linux VM and setup: Kops, kubectl, ssh keys, awscli, IAM user for AWSCLI
+		8.2.1 Create EC2 Instance -> Ubuntu
+		8.2.2 Create IAM user -> AdministrativeAccess -> Create access key.
+		8.2.3 Login using ssh	
+			8.2.3.1 ssh -i kops-key.pem ubuntu@<EC2 Public IP>
+			8.2.3.2 sudo -i
+			8.2.3.3 apt update
+			8.2.3.4 snap install aws-cli --classic
+			8.2.3.5 Store accesskey: 
+				-> aws configure : access key, secret key, region,format(json)
+			8.2.3.6 ssh-keygen
+			8.2.3.7 kops installation:   https://kops.sigs.k8s.io/getting_started/install/ -> DNS, store, api
+				a. curl -Lo kops https://github.com/kubernetes/kops/releases/download/$(curl -s https://api.github.com/repos/kubernetes/kops/releases/latest | grep tag_name | cut -d '"' -f 4)/kops-linux-amd64
+			    b. chmod +x kops
+			    c. sudo mv kops /usr/local/bin/kops
+			    d. kops
+			8.2.3.8 Kubectl installtion: https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/#install-kubectl-binary-with-curl-on-linux -> running container, pods nodes
+				a. curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+				b. sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+				c. kubectl version --client
+	8.3 Login to AWS Account and setup : S3 Bucket and Route53 for Hosted Zone.
+		8.3.1 S3 bucket : kopsstore1201
+		8.3.2 Route53: kopsvpro.awsdevops.xyz
+			a. copy all 4 ns in godaddy.
+		8.3.3 kops create cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --zones=us-east-2a,us-east-2b --node-count=2 --node-size=t3.small --control-plane-size=t3.medium --dns-zone=kopsvpro.awsdevops.xyz --node-volume-size=12 --control-plane-volume-size=12 --ssh-public-key ~/.ssh/id_ed25519.pub
+		8.3.4 kops update cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --yes --admin
+		8.3.5 kops validate cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201
+		8.3.6 kubectl get nodes
+		8.3.7 go to route53 check public and private ip of api.kopsvpro.awsdevops.xyz
+		8.3.8 Automatically One master and two workernodes instances start running.
+		8.3.9 It will automatically create VPC, Subnet, Auto Scaling Group, Security Groups.
+		8.3.10 Delete Cluster: kops delete cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --yes
+		
+9. AWS EKS for the cluster
+	9.1 Open gitbash and goto vprofile-profile/eks/
+	9.2 Change regionname from the files.
+	9.3 Create key-pair in AWS as mentioned in eks-cluster-setup.sh file
+	9.2 vagrant up
+	9.3 check commands aws --version, kubectl  version, eksctl version
+	9.4 aws configure =  use Access key and secret key of kopadmin(not compulsary)
+	9.5 cd /vagrant/
+	9.6 Run script = ./eks-cluster-setup.sh
+	9.7 cat /home/vagrant/.kube/config
+	9.8 kubectl get nodes
+	9.9 eksctl delete cluster <name of cluster> 

@@ -1,0 +1,56 @@
+1. Git clone https://github.com/hkhcoder/vprofile-project/tree/kubeapp
+2. Create docker-compose.yaml file
+3. Create defination files:				Note: name should be matched with application.properties file.
+	1. appingress.yaml,  // Manage internal and external load balance like nginx
+	2. secret.yaml,		 // kept secret password for db and rmq
+	3. appdeploy.yaml,   // app deployment by providing details like containername, portno, 
+	4. appservice.yaml,  // manage appdeployment pod running.
+	5. dbpvc.yaml	     // Persistance Volume Class used incase any pod fail or deleted then it mantain the state or backup for that pod.
+	6. dbdeploy.yaml,    // database deployement
+	7. dbservice.yaml,   // manage dbdeployment pod running
+	8. rmqdeploy.yaml,	 // Rabbit mQ deployment
+	9. rmqservice.yaml,  //manage rmqdeployment pod running
+	10. mcdeploy.yaml,   //Memcached Deployment.
+	11. mcservice.yaml,  //manage mcdeploment pod running
+4. Login SSH and write below command to create cluster on Kops EC2 AWS instance.
+	-> kops create cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --zones=us-east-2a,us-east-2b --node-count=2 --node-size=t3.small --control-plane-size=t3.medium --dns-zone=kopsvpro.awsdevops.xyz --node-volume-size=12 --control-plane-volume-size=12 --ssh-public-key ~/.ssh/id_ed25519.pub
+	-> kops update cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --yes --admin
+5. Create github repo named as vprokube-prod and upload Docker-files, Kube-files and docker-compose file.
+6. git clone https://github.com/lamebits/vprokube-prod.git in ssh root directory.
+7. kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml
+8. kubectl get ns // namespace
+9. kubectl get pods --namespace ingress-nginx 		// it will create two node instance and one master instance in AWS and also load balancer.
+10. kubectl get nodes	// shows the status of running nodes.
+11. goto root@ip-172-31-25-137:~/vprokube-prod/kubedefs#
+12. create PersistanceVolumeClaim
+	-> kubectl create -f dbpvc.yaml
+13. execute all defination files
+	-> kubectl create -f .
+14. Check pods are running
+	-> kubectl get pods
+15. Check deploy status
+	-> kubectl get deploy
+16 check services
+	-> kubectl get svc
+17. if any error received then delete any file
+	-> kubectl delete -f <filename.yaml>
+18. get details of all services and check the EndPoints:
+	-> kubectl describe svc <servicename>
+19. check pvc 
+	-> kubectl get pvc
+20. check StorageClass
+	-> kubectl get sc
+21. check status of ingress
+	-> kubectl get ingress
+22. Copy Endpoint(ingress/load balancer DNS Name) into godaddy account
+	-> kubectl describe ingress vpor-ingress
+	->CNAMe-> vprofile-> ad441759a412a4c04a67aef545847241-64a9bdb8b7054e20.elb.us-east-2.amazonaws.com
+23. Copy Hostname "http://vprofile.hkhinfoteck.xyz" and check it in browser.
+24. Cleanup
+	a. Delete Ingree-Controller
+		-> kubectl delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml
+	b. Delete all defination file which are clone in root directory
+		-> goto vprokube-prod->kube-def-> kubectl delete -f .
+	c. Delete cluster
+		-> kops delete cluster --name=kopsvpro.awsdevops.xyz --state=s3://kopsstore1201 --yes
+	d. Delete Instance and Route53

@@ -1,0 +1,300 @@
+1. GitHub Setup
+	1.1 Fork github repository one for terraform code and another one for application
+		1. https://github.com/lamebits/iac-vprofile
+		2. https://github.com/lamebits/vprofile-action
+	1.2 Open GitBash
+		a. cd ~/.ssh
+		b. ssh-keygen
+		c. gitopsactions - give name to keys
+		d. copy .pub file content and add SSH key into Github -> Setting -> SSH and GPG Keys.
+		e. export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitopsactions"
+	1.3 git clone both the repository.
+		a. git clone git@github.com:lamebits/vprofile-action.git
+		b. git clone git@github.com:lamebits/iac-vprofile.git
+	1.4 Run command to login both the folder using ssh
+		cd iac-vprofile and cd vprofile-actions
+		a. git config core.sshCommand "ssh -i ~/.ssh/gitopsactions -F /dev/null"
+	1.5 git config --global user.name lamebits
+	1.6 git config --global user.email meenalmate1663@gmail.com
+	1.7 cp -r iac-vprofile main-iac-vprofile		// create copy of iac-vprofile folder
+	1.8 cd iac-vprofile
+	1.9 git checkout stage 
+	1.10 git status 			// check status of git branch stage
+2. GitHub Secrets
+	2.1 Create IAM user and store Access Key and Secret Key in both the repositories
+	2.2 Create S3 bucket(vprofilegitopsactions) store bucket name in iac-vprofile setting.
+	2.3 Create ECR(vprofileapp) and copy URI
+	2.4 iac-vprofile 
+		AWS_ACCESS_KEY_ID: AKIAQKP-----VTZ26O
+		AWS_SECRET_ACCESS_KEY: aQPhGhaCHZSM4U-----GzP0B+k+f/1v9
+		BUCKET_TF_STATE: vprofilegitopsactions
+	2.5 vprofile-actions 
+		AWS_ACCESS_KEY_ID: AKIAQKP------LQVTZ26O
+		AWS_SECRET_ACCESS_KEY: aQPhGhaCHZSM-------ov2tGzP0B+k+f/1v9
+		REGISTORY: 0224----066.dkr.ecr.us-east-2.amazonaws.com
+3. Create Terraform Code for EKS in iac-vprofile folder like VPC, variable, Provider, EKS, ClusterName, BucketName, Kubernetes etc.
+4. Create .github/workflows folder and inside it create terraform.yml file
+5. terraform.yml
+	name: "Vprofile IAC"
+	on:
+	  push:
+		branches:
+		  - main
+		  - stage
+		paths:
+		  - terraform/**
+	  pull_request:
+		branches:
+		  - main
+		paths:
+		  - terraform/**
+
+	env:
+	  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+	  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+	  BUCKET_TF_STATE: ${{ secrets.BUCKET_TF_STATE }}
+	  AWS_REGION: us-east-2
+	  EKS_CLUSTER: vprofile-eks
+
+	jobs:
+	  terraform:
+		name: "Apply Terraform Code Changes"
+		runs-on: ubuntu-latest
+		defaults:
+		  run:
+			shell: bash
+			working-directory: ./terraform
+
+		steps:
+		  - name: Checkout source code
+			uses: actions/checkout@v4 
+
+		  - name: Setup Terraform with specified Version 
+			uses: hashicorp/setup-terraform@v3
+			#with:
+				#terraform_version: "1.1.7"
+
+		  - name: Terraform init
+			id: init
+			run: terraform init -backend-config="bucket=$BUCKET_TF_STATE"
+			
+		  - name: Terraform Format
+			id: fmt
+			run: terraform fmt -check
+		  
+		  - name: Terraform validate
+			id: validate
+			run: terraform validate
+
+		  - name: Terraform Plan
+			id: plan
+			run: terraform plan -no-color -input=false -out planfile
+			continue-on-error: true
+
+		  - name: Terraform Plan Status
+			if: steps.plan.outcome == 'failure'
+			run: exit 1
+
+		  - name: Terraform Apply
+			id: apple
+			if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+			run: terraform apply -auto-approve -input=false -parallelism=1 planfile
+
+		  - name: Configure AWS Credentials
+			uses: aws-actions/configure-aws-credentials@v4
+			with:
+			  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+			  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+			  aws-region: ${{ env.AWS_REGION }}
+
+		  - name: Get Kube Config file
+			id: getconfig
+			if: steps.apple.outcome == 'success'
+			run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+
+		  - name: Install Ingress Controller
+			if: steps.apple.outcome == 'success' && steps.getconfig.outcome == 'success'
+			run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml
+6. open git bash	
+	6.1 go to main-iac
+	6.2 git pull
+	6.3 git checkout main
+	6.4 git merge stage
+	6.4 git push origin main
+	All eks, ec2, vpc, ,oad balancer created in AWS.
+7. Do Build, Test and deploy code using vprofile-actions repository
+	7.1 Create .github/workflows/main.yml file
+		name: vprofile actions
+		on: workflow_dispatch
+		env:
+		  AWS_REGION: us-east-2
+		  ECR_REPOSITORY: vprofileapp
+		  EKS_CLUSTER: vprofile-eks
+		jobs:
+		  Testing:
+			runs-on: ubuntu-latest
+			steps:
+			  - name: code checkout
+				uses: actions/checkout@v4
+
+			  - name: Maven Test
+				run: mvn test
+
+			  - name: CheckStyle
+				run: mvn checkstyle:checkstyle
+
+			  - name: Setup Java 
+				uses: actions/setup-java@v3
+				with:
+				  distribution: 'temurin' # See 'Supported distributions' for available options
+				  java-version: '11'
+
+			  - name: Set up SonarQube
+				uses: warchant/setup-sonar-scanner@v7
+
+			  - name: SonarQube Scan
+				run: sonar-scanner
+				  -Dsonar.host.url=${{ secrets.SONAR_URL }} 
+				  -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+				  -Dsonar.organization=${{ secrets.SONAR_ORGANISATION }}
+				  -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+				  -Dsonar.sources=src/
+				  -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/
+				  -Dsonar.junit.reportsPath=target/surefire-reports/
+				  -Dsonar.jacoco.reportsPath=target/jacoco.exec
+				  -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+
+			  - name: SonarQube quality Gate Check
+				id:  sonarqube-quality-gate-check
+				uses: sonarsource/sonarqube-quality-gate-action@master
+				timeout-minutes: 5
+				env: 
+				  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+				  SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
+	7.2 Commit and test the workflow in github.
+8. Deploy to EKS
+	8.1 Install Helm: Open PowerShell as Admin and run "choco install kubernetes-helm"
+	8.2 open git bash in vprofile-actions folder and run command "helm create vprofilecharts"
+	8.3 mkdir helm
+	8.4 mv vprofilecharts/ helm/
+	8.5 rm -rf helm/vprofilecharts/templates/*
+	8.5 cp kubernetes/vpro-app/* /helm/vprofilecharts/templates/
+	8.6 edit vproingress.yaml "host: vprofile.awsdevops.xyz"
+	8.7 edit vproappdep.yaml "image: {{ .Values.appimage}}:{{ .Values.apptags}}" 
+	8.8 main.yaml
+		name: vprofile actions
+		on: workflow_dispatch
+		env:
+		  AWS_REGION: us-east-2
+		  ECR_REPOSITORY: vprofileapp
+		  EKS_CLUSTER: vprofile-eks
+		jobs:
+		  Testing:
+			runs-on: ubuntu-latest
+			steps:
+			  - name: code checkout
+				uses: actions/checkout@v4
+
+			  - name: Maven Test
+				run: mvn test
+
+			  - name: CheckStyle
+				run: mvn checkstyle:checkstyle
+
+			  - name: Setup Java 
+				uses: actions/setup-java@v3
+				with:
+				  distribution: 'temurin' # See 'Supported distributions' for available options
+				  java-version: '11'
+
+			  - name: Set up SonarQube
+				uses: warchant/setup-sonar-scanner@v7
+
+			  - name: SonarQube Scan
+				run: sonar-scanner
+				  -Dsonar.host.url=${{ secrets.SONAR_URL }} 
+				  -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+				  -Dsonar.organization=${{ secrets.SONAR_ORGANISATION }}
+				  -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+				  -Dsonar.sources=src/
+				  -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/
+				  -Dsonar.junit.reportsPath=target/surefire-reports/
+				  -Dsonar.jacoco.reportsPath=target/jacoco.exec
+				  -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+
+			  - name: SonarQube quality Gate Check
+				id:  sonarqube-quality-gate-check
+				uses: sonarsource/sonarqube-quality-gate-action@master
+				timeout-minutes: 5
+				env: 
+				  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+				  SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
+
+		  Build_and_Publish:
+			needs: Testing
+			runs-on: ubuntu-latest
+			steps:  
+			  - name: Code checkout
+				uses: actions/checkout@v4
+
+			  - name: Build and upload image to ECR
+				uses: appleboy/docker-ecr-action@master
+				with:
+				  access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+				  secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+				  registry: ${{ secrets.REGISTORY }}
+				  repo: ${{ env.ECR_REPOSITORY }}
+				  region: ${{ env.AWS_REGION }}
+				  daemon_off: false
+				  tags: latest,${{ github.run_number }}
+				  dockerfile: ./Dockerfile
+				  context: ./
+
+		  DeployToEKS:
+			needs: Build_and_Publish
+			runs-on: ubuntu-latest
+			steps:  
+			  - name: Code checkout
+				uses: actions/checkout@v4
+
+			  - name: Configure AWS Credentials
+				uses: aws-actions/configure-aws-credentials@v4
+				with:
+				  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+				  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+				  aws-region: ${{ env.AWS_REGION }}
+
+			  - name: Get Kube Config file
+				run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+
+			  - name: Print Config file
+				run: cat ~/.kube/config
+				  
+			  - name: Login to ECR
+				run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTORY }} --docker-username=AWS --docker-password=$(aws ecr get-login-password)
+
+			  - name: Helm Configure & Deploy
+				uses: ccapell/action-deploy-eks-helm@v1.0.3
+				with:
+				  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+				  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+				  aws-region: ${{ env.AWS_REGION }}
+				  cluster-name: ${{ env.EKS_CLUSTER }}
+				  #config-files: .github/values/dev.yaml
+				  chart-path: helm/vprofilecharts
+				  namespace: default
+				  values: appimage=${{ secrets.REGISTORY }}/${{ env.EKS_REGISTORY }},apptags=${{ github.run_number }}
+				  name: vprofile-stack
+		8.9 Commit and execute.
+		8.10 Copy load balancer URI and Go Daddy CNAME
+		8.11 verify http://vprofile.awsdevops.xyz url in browser.
+9. Cleanup
+	9.1 Create Access Key and secret Key IAM User
+	9.2 Open git bash "aws configure", write access and secret key
+	9.3 rm -rf ~/.kube/config
+	9.4 aws eks update-kubeconfig --region us-east-2 --name vprofile-eks
+	9.5 kubectl get nodes
+	9.6 kubectl delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml		// it will delete ingress controller from the AWS
+	9.7 helm uninstall vprofile-stack
+	9.8 terraform init -backend-config="bucket=vprofilegitopsactions"
+	9.9 terraform destroy

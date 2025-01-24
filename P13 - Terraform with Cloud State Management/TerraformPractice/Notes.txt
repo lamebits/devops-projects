@@ -1,0 +1,28 @@
+1. Terraform Installtion
+	choco install terraform
+2. Automate AWS
+	a. Create IAM User and Security keys
+	b. use "aws configure" command in gitbash to connect with aws account.
+3. To writting terraform code in VS Code install HasiCorp Terraform Extension.
+4. Write Terraform Code to find AMI ID for Ubuntu AWS Instance
+	provider "aws" {
+    region = "us-east-2"
+	}
+	data "aws_ami" "ami_id" {
+	  most_recent = true
+	  filter {
+		name  = "name"
+		values = ["ubuntu/images/hvm-ssd/ubuntu-*"]
+	  }
+	  owners = ["099720109477"]
+	}
+	output "Instance_ID" {
+	  description = "AMI ID of Ubuntu"
+	  value       = data.aws_ami.ami_id.id
+	}
+5. Code to execute the terraform ".tf" file
+	a. Terraform fmt
+	b. Terraform init
+	c. Terraform validate
+	d. Terraform plan
+	e. Terraform apply

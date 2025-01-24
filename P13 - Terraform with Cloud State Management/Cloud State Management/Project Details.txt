@@ -1,0 +1,515 @@
+1. Setup Terraform with Backend
+	1.1 Create AWS S3 bucket
+	1.2 backend.tf
+		terraform {
+			backend "s3" {
+				bucket = "terraformstate1901"
+				key = "terraform/backend"
+				region = "us-east-2"
+			}
+		}
+	1.3 Another method HCP Terraform
+		Used HCP Application create organisation and workspace
+		terraform {
+			backend "remote" {
+				organization = ""
+				workspace {
+					name = ""
+				}
+			}
+		}
+2. Setup VPC
+	check Terraform registory -> Modules -> Select AWS -> terraform-aws-modules / vpc
+	module "vpc" {
+	  source = "terraform-aws-modules/vpc/aws"
+
+	  name = var.VPC_NAME
+	  cidr = var.VpcCIDR
+
+	  azs             = [var.Zone1, var.Zone2, var.Zone3]
+	  private_subnets = [var.PrivSub1CIDR, var.PrivSub2CIDR, var.PrivSub3CIDR]
+	  public_subnets  = [var.PubSub1CIDR, var.PubSub2CIDR, var.PubSub3CIDR]
+
+	  enable_nat_gateway      = true
+	  single_nat_gateway      = true
+	  enable_dns_support      = true
+	  enable_dns_hostnames    = true
+	  map_public_ip_on_launch = true
+
+	  tags = {
+		Name    = var.VPC_NAME
+		Project = var.PROJECT
+	  }
+	}
+3. Key Pairs
+	resource "aws_key_pair" "vprofilekey" {
+	  key_name   = "vprofilekey"
+	  public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGO6MK8Q7O0YrcDhj2ujAqNks1/YtyQ5lep2ifpMx4DZ meena@DESKTOP-FIHLLKC"
+	}
+4. Security groups, ELB, Bastion, Backend 
+
+	resource "aws_security_group" "vprofile-bean-elb-sg" {
+		  name        = "vprofile-bean-elb-sg"
+		  description = "Security Group for Elatic BeanStalk"
+		  vpc_id      = module.vpc.vpc_id
+		  tags = {
+			Name      = "vprofile-bean-elb"
+			Project   = "Vprofile"
+			ManagedBy = "Terraform"
+		  }
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "allow_http_forELB" {
+		  security_group_id = aws_security_group.vprofile-bean-elb-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "tcp"
+		  from_port         = 80
+		  to_port           = 80
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv4forELB" {
+		  security_group_id = aws_security_group.vprofile-bean-elb-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv6forELB" {
+		  security_group_id = aws_security_group.vprofile-bean-elb-sg.id
+		  cidr_ipv6         = "::/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_security_group" "vprofile-bastion-sg" {
+		  name        = "vprofile-bastion-sg"
+		  description = "Security Group for Bastion EC2 Instance"
+		  vpc_id      = module.vpc.vpc_id
+		  tags = {
+			Name      = "vprofile-bastion-sg"
+			Project   = "Vprofile"
+			ManagedBy = "Terraform"
+		  }
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "sshFromMyIPforBastion" {
+		  security_group_id = aws_security_group.vprofile-bastion-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "tcp"
+		  from_port         = 22
+		  to_port           = 22
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv4forBastion" {
+		  security_group_id = aws_security_group.vprofile-bastion-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv6forBastion" {
+		  security_group_id = aws_security_group.vprofile-bastion-sg.id
+		  cidr_ipv6         = "::/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_security_group" "vprofile-prodbean-sg" {
+		  name        = "vprofile-prodbean-sg"
+		  description = "Security Group for BeanStalk Instance"
+		  vpc_id      = module.vpc.vpc_id
+		  tags = {
+			Name      = "vprofile-prodbean-sg"
+			Project   = "Vprofile"
+			ManagedBy = "Terraform"
+		  }
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "allow_http_fromELB" {
+		  security_group_id            = aws_security_group.vprofile-prodbean-sg.id
+		  referenced_security_group_id = aws_security_group.vprofile-bean-elb-sg.id
+		  ip_protocol                  = "tcp"
+		  from_port                    = 80
+		  to_port                      = 80
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "sshFromAnyWhere" {
+		  security_group_id = aws_security_group.vprofile-prodbean-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "tcp"
+		  from_port         = 22
+		  to_port           = 22
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv4forBastInst" {
+		  security_group_id = aws_security_group.vprofile-prodbean-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv6forBastInst" {
+		  security_group_id = aws_security_group.vprofile-prodbean-sg.id
+		  cidr_ipv6         = "::/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_security_group" "vprofile-backend-sg" {
+		  name        = "vprofile-backend-sg"
+		  description = "Security Group for AWS RDS, Elastic Cache and Rabbit MQ"
+		  vpc_id      = module.vpc.vpc_id
+		  tags = {
+			Name      = "vprofile-backend-sg"
+			Project   = "Vprofile"
+			ManagedBy = "Terraform"
+		  }
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "AllowAllFromBeanInstance" {
+		  security_group_id            = aws_security_group.vprofile-backend-sg.id
+		  referenced_security_group_id = aws_security_group.vprofile-prodbean-sg.id
+		  ip_protocol                  = "tcp"
+		  from_port                    = 0
+		  to_port                      = 65535
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "Allow3306FromBeanInstance" {
+		  security_group_id            = aws_security_group.vprofile-backend-sg.id
+		  referenced_security_group_id = aws_security_group.vprofile-bastion-sg.id
+		  ip_protocol                  = "tcp"
+		  from_port                    = 3306
+		  to_port                      = 3306
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv4forbackend" {
+		  security_group_id = aws_security_group.vprofile-backend-sg.id
+		  cidr_ipv4         = "0.0.0.0/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_vpc_security_group_egress_rule" "allowAllOutBound_ipv6forbackend" {
+		  security_group_id = aws_security_group.vprofile-backend-sg.id
+		  cidr_ipv6         = "::/0"
+		  ip_protocol       = "-1"
+		}
+
+		resource "aws_vpc_security_group_ingress_rule" "BackendSec_group_allow_itself" {
+		  security_group_id            = aws_security_group.vprofile-backend-sg.id
+		  referenced_security_group_id = aws_security_group.vprofile-backend-sg.id
+		  ip_protocol                  = "tcp"
+		  from_port                    = 0
+		  to_port                      = 65535
+		}
+	
+5. Backend-service[RDS, Elastic Cache, Active MQ]
+
+		resource "aws_db_subnet_group" "vprofile-rds-subgrp" {
+		  name       = "vprofile-rds-subgrp"
+		  subnet_ids = [module.vpc.private_subnets[0], module.vpc.private_subnets[1], module.vpc.private_subnets[2]]
+		  tags = {
+			Name = "Subnet Groups for RDS"
+		  }
+		}
+
+		resource "aws_elasticache_subnet_group" "vprofile-ecache-subgrp" {
+		  name       = "vprofile-ecache-subgrp"
+		  subnet_ids = [module.vpc.private_subnets[0], module.vpc.private_subnets[1], module.vpc.private_subnets[2]]
+		  tags = {
+			Name = "Subnet Groups for Elasticache"
+		  }
+		}
+
+		resource "aws_db_instance" "vprofile-rds" {
+		  allocated_storage      = 20
+		  storage_type           = "gp3"
+		  db_name                = var.dbname
+		  engine                 = "mysql"
+		  engine_version         = "8.0"
+		  instance_class         = "db.t3.micro"
+		  username               = var.dbuser
+		  password               = var.dbpass
+		  parameter_group_name   = "default.mysql8.0"
+		  multi_az               = "false"
+		  publicly_accessible    = false
+		  skip_final_snapshot    = true
+		  db_subnet_group_name   = aws_db_subnet_group.vprofile-rds-subgrp.name
+		  vpc_security_group_ids = [aws_security_group.vprofile-backend-sg.id]
+		}
+
+		resource "aws_elasticache_cluster" "vprofile-cache" {
+		  cluster_id           = "vprofile-cache"
+		  engine               = "memcached"
+		  node_type            = "cache.t3.micro"
+		  num_cache_nodes      = 2
+		  parameter_group_name = "default.memcached1.6"
+		  port                 = 11211
+		  security_group_ids   = [aws_security_group.vprofile-backend-sg.id]
+		  subnet_group_name    = aws_elasticache_subnet_group.vprofile-ecache-subgrp.name
+		}
+
+		resource "aws_mq_broker" "vprofile-rmq" {
+		  broker_name        = "vprofile-rmq"
+		  engine_type        = "RabbitMQ"
+		  engine_version     = "3.13"
+		  host_instance_type = "mq.t3.micro"
+		  auto_minor_version_upgrade = true
+		  security_groups    = [aws_security_group.vprofile-backend-sg.id]
+		  subnet_ids         = [module.vpc.private_subnets[0]]
+
+		  user {
+			username = var.rmquser
+			password = var.rmqpass
+		  }
+		}
+	
+6. Provision BenaStalk Environment
+
+1. beanapp.tf	
+	resource "aws_elastic_beanstalk_application" "vprofile-prod" {
+		name        = "vprofile-prod"
+		description = "Beanstalk app for vprofile project by Terraform"
+	}
+2. beanenv.tf
+	resource "aws_elastic_beanstalk_environment" "vprofile-bean-prod" {
+	  name                = "vprofile-bean-prod"
+	  application         = aws_elastic_beanstalk_application.vprofile-prod.name
+	  solution_stack_name = "64bit Amazon Linux 2023 v5.4.2 running Tomcat 10 Corretto 21"
+	  cname_prefix        = "vprofile-bean-prod-meenal"
+
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "IamInstanceProfile"
+		value     = "aws-elasticbeanstalk-ec2-role"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "RootVolumeType"
+		value     = "gp3"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "DisableIMDSv1"
+		value     = true
+	  }
+	  setting {
+		namespace = "aws:ec2:vpc"
+		name      = "AssociatePublicIpAddress"
+		value     = true
+	  }
+
+	  setting {
+		namespace = "aws:ec2:vpc"
+		name      = "Subnets"
+		value     = join(",", [module.vpc.private_subnets[0], module.vpc.private_subnets[1], module.vpc.private_subnets[2]])
+	  }
+	  setting {
+		namespace = "aws:ec2:vpc"
+		name      = "ELBSubnets"
+		value     = join(",", [module.vpc.public_subnets[0], module.vpc.public_subnets[1], module.vpc.public_subnets[2]])
+	  }
+
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "InstanceType"
+		value     = "t3.micro"
+	  }
+
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "EC2KeyName"
+		value     = aws_key_pair.vprofilekey.key_name
+	  }
+
+	  setting {
+		namespace = "aws:autoscaling:asg"
+		name      = "Availability Zones"
+		value     = "Any 3"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:asg"
+		name      = "MinSize"
+		value     = "1"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:asg"
+		name      = "MaxSize"
+		value     = "8"
+	  }
+
+	  setting {
+		namespace = "aws:elasticbeanstalk:application:environment"
+		name      = "environment"
+		value     = "prod"
+	  }
+	  setting {
+		namespace = "aws:elasticbeanstalk:application:environment"
+		name      = "LOGGING_APPENDER"
+		value     = "GRAYLOG"
+	  }
+	  setting {
+		namespace = "aws:elasticbeanstalk:healthreporting:system"
+		name      = "SystemType"
+		value     = "enhanced"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+		name      = "RollingUpdateEnabled"
+		value     = "true"
+	  }
+	  setting {
+		namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+		name      = "RollingUpdateType"
+		value     = "Health"
+	  }
+
+	  setting {
+		namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+		name      = "MaxBatchSize"
+		value     = "1"
+	  }
+	  setting {
+		namespace = "aws:elb:loadbalancer"
+		name      = "CrossZone"
+		value     = "true"
+	  }
+
+	  setting {
+		name      = "StickinessEnabled"
+		namespace = "aws:elasticbeanstalk:environment:process:default"
+		value     = "true"
+	  }
+
+	  setting {
+		namespace = "aws:elasticbeanstalk:command"
+		name      = "BatchSizeType"
+		value     = "Fixed"
+	  }
+
+	  setting {
+		namespace = "aws:elasticbeanstalk:command"
+		name      = "BatchSize"
+		value     = "1"
+	  }
+	  setting {
+		namespace = "aws:elasticbeanstalk:command"
+		name      = "DeploymentPolicy"
+		value     = "Rolling"
+	  }
+
+	  setting {
+		namespace = "aws:autoscaling:launchconfiguration"
+		name      = "SecurityGroups"
+		value     = aws_security_group.vprofile-bean-elb-sg.id
+	  }
+
+	  setting {
+		namespace = "aws:elbv2:loadbalancer"
+		name      = "SecurityGroups"
+		value     = aws_security_group.vprofile-prodbean-sg.id
+	  }
+
+	  depends_on = [aws_security_group.vprofile-bean-elb-sg, aws_security_group.vprofile-prodbean-sg]
+	}
+3. Create Bastion EC2 Instance and DB Initialization
+	data "aws_ami" "Ubuntu22ami" {
+	  most_recent = true
+
+	  filter {
+		name   = "name"
+		values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+	  }
+
+	  filter {
+		name   = "virtualization-type"
+		values = ["hvm"]
+	  }
+
+	  owners = ["099720109477"] # Canonical
+	}
+
+	resource "aws_instance" "vprofile-bastion" {
+	  ami           = data.aws_ami.Ubuntu22ami.id
+	  instance_type = "t3.micro"
+	  key_name = aws_key_pair.vprofilekey.key_name
+	  subnet_id = module.vpc.public_subnets[0]
+	  count = var.instance_count
+	  vpc_security_group_ids = [aws_security_group.vprofile-bastion-sg.id]
+	  tags = {
+		Name = "vprofile-bastion"
+		Project = "vprofile"
+	  }
+	}
+3.1 Create template folder in the project directory inside create file db-deploy.tmpl
+	sudo apt update
+	sudo apt install git mysql-client -y
+	git clone -b local https://github.com/hkhcoder/vprofile-project.git
+	mysql -h ${rds-endpoint} -u ${dbuser} --password=${dbpass} accounts --ssl-mode=DISABLED < /home/ubuntu/vprofile-project/src/main/resources/db_backup.sql 
+3.2 add provisioner for adding file, connection and remote-exec
+	data "aws_ami" "Ubuntu22ami" {
+	  most_recent = true
+
+	  filter {
+		name   = "name"
+		values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+	  }
+
+	  filter {
+		name   = "virtualization-type"
+		values = ["hvm"]
+	  }
+
+	  owners = ["099720109477"] # Canonical
+	}
+
+	resource "aws_instance" "vprofile-bastion" {
+	  ami           = data.aws_ami.Ubuntu22ami.id
+	  instance_type = "t3.micro"
+	  key_name = aws_key_pair.vprofilekey.key_name
+	  subnet_id = module.vpc.public_subnets[0]
+	  count = var.instance_count
+	  vpc_security_group_ids = [aws_security_group.vprofile-bastion-sg.id]
+	  tags = {
+		Name = "vprofile-bastion"
+		Project = "vprofile"
+	  }
+
+	  provisioner "file" {
+		content = templatefile("templates/db-deploy.tmpl", {rds-endpoint = aws_db_instance.vprofile-rds.address, dbuser = var.dbuser, dbpass = var.dbpass})
+		destination = "/tmp/vprofile-dbdeploy.sh"
+	  }
+
+	  connection {
+		type = "ssh"
+		user = var.USERNAME
+		private_key = file(var.PRIV_KEY_PATH)
+		host = self.public_ip
+	  }
+
+	  provisioner "remote-exec" {
+		inline = [
+			"chmod +x /tmp/vprofile-dbdeploy.sh",
+			"sudo /tmp/vprofile-dbdeploy.sh"
+		]
+	  }
+	}
+7. Artifact Deployment
+	7.1 git clone "https://github.com/hkhcoder/vprofile-project.git"
+	7.2 Branch "terraform-project"
+	7.3 ssh login
+	7.4 create output.tf file
+			output "RDSEndPoint"{
+				description = "RDS EndPoint"
+				value = aws_db_instance.vprofile-rds.endpoint
+			}
+
+			output "MemCacheEndPoint"{
+				description = "MemCache EndPoint"
+				value = aws_elasticache_cluster.vprofile-cache.configuration_endpoint
+			}
+
+			output "RabbitMQEndPoint"{
+				description = "RabbitMQ EndPoint"
+				value = aws_mq_broker.vprofile-rmq.instances.0.endpoints
+			}
+	7.5 in application.properties file	
+		a. db01 of jdbc_url should replace with RDEEndPoint
+		b. memcached.active.host = MemCacheEndPoint
+		c. rabbitmq.address = RabbitMQEndPoint, port, username(mentioned in vars.tf file), password
+	7.6 Run "mvn install" command in vprofile-project folder which will create vprofile-v2.war file
+	7.7 Go to ElasticBean Stalk -> Click Upload and deploy -> upload vprofile-v2.war file.
+	7.8 Verify domain in browser.

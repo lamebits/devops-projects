@@ -1,0 +1,39 @@
+- name: Generate qrtifact, copy artifact & SQL file to file directory
+  hosts: localhost
+  connection: local
+  become: yes
+  tasks:
+    - name: Install GIT, JDK and MVN
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop:
+        - git
+        - openjdk-8-jdk
+        - maven
+
+    - name: Clone source code from git hub
+      git:
+        repo: 'https://github.com/devopshydclub/vprofile-project.git'
+        dest: ./Vprofile-repo
+        version: vp-rem
+      register: git_status
+
+    - name: mvn install command to build artifact
+      command: "mvn install"
+      args:
+        chdir: Vprofile-repo
+      when: git_status.changed
+      register: mvn_info
+
+    - name: Copy artifact to files directory
+      copy:
+        src: "{{ item }}"
+        dest: files/ROOT.war
+      with_fileglob: Vprofile-repo/target/*.war
+
+    - name: Copy files to files directory
+      copy:
+        src: Vprofile-repo/src/main/resources/db_backup.sql
+        dest: files/db_backup.sql

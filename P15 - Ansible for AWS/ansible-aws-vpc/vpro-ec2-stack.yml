@@ -1,0 +1,263 @@
+- name: Setup Vprofile stack
+  hosts: localhost 
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Import output_vars file
+      include_vars:
+        file: vars/output_vars
+
+    - name: Import vprostacksetup file
+      include_vars:
+        file: vars/vprostacksetup.txt
+
+    - name: Import vpc_setup file
+      include_vars:
+        file: vars/vpc_setup.txt
+
+    - name: Create Vprofile EC2 Key-Pair
+      ec2_key:
+        name: vprokey
+        region: "{{ region }}"
+      register: vprokey_out
+
+    - name: Save private key into loginkey-vpro.pem file
+      copy:
+        content: "{{ vprokey_out.key.private_key }}"
+        dest: "./loginkey-vpro.pem"
+        mode: 0600
+      when: vprokey_out.changed
+
+    - name: Create Security Group for Load Balancer
+      ec2_group:
+        name: vproELB-sg
+        description: Allow port 80 from everywhere and all port within sg
+        region: "{{ region }}"
+        vpc_id: "{{ vpcid }}"
+        rules:
+          - to_port: 80
+            from_port: 80
+            proto: tcp
+            cidr_ip: 0.0.0.0/0 
+      register: vproELB_out
+
+    - name: Create Security Group for Vprofile Stack 
+      ec2_group:  
+        name: vproStack-sg
+        description: Allow port 22 from everywhere and all port within sg
+        region: "{{ region }}"
+        vpc_id: "{{ vpcid }}"
+        purge_rules: no
+        rules:
+          - to_port: 80
+            from_port: 80
+            proto: tcp
+            group_id: "{{ vproELB_out.group_id }}"
+
+          - to_port: 22
+            from_port: 22
+            proto: tcp
+            group_id: "{{ BastionSG_Id }}"
+      register: vproStacksg_out
+
+    - name: Update Security Group with its own sg id
+      ec2_group:
+        name: vproStack-sg
+        description: Allow port 22 from everywhere and all port within sg
+        region: "{{ region }}"
+        vpc_id: "{{ vpcid }}"
+        purge_rules: no
+        rules:
+          - proto: all
+            group_id: "{{ vproStacksg_out.group_id }}" 
+
+    - name: Create EC2 Nginx web01
+      ec2_instance:
+        key_name: vprokey
+        region: "{{ region }}"
+        instance_type: t2.micro
+        image: 
+          id: "{{ nginx_ami }}" 
+        wait: yes
+        wait_timeout: 300
+        tags:   
+          Name: "web01"
+          Project: "Vprofile" 
+          Owner: DevOps Team
+        exact_count: 1
+        #count_tag: 
+          #Name: "Bastion_Host"
+          #Project: "Vprofile" 
+          #Owner: DevOps Team
+        security_group: "{{ vproStacksg_out.group_id }}"
+        vpc_subnet_id: "{{ privsub1id }}"
+      register: web01_out
+
+    - name: Create EC2 Tomcat app01
+      ec2_instance:
+        key_name: vprokey
+        region: "{{ region }}"
+        instance_type: t2.micro
+        image: 
+          id: "{{ tomcat_ami }}" 
+        wait: yes
+        wait_timeout: 300
+        tags:   
+          Name: "app01"
+          Project: "Vprofile" 
+          Owner: DevOps Team
+        exact_count: 1
+        #count_tag: 
+          #Name: "Bastion_Host"
+          #Project: "Vprofile" 
+          #Owner: DevOps Team
+        security_group: "{{ vproStacksg_out.group_id }}"
+        vpc_subnet_id: "{{ privsub1id }}"
+      register: app01_out
+
+    - name: Create EC2 Memcache mc01
+      ec2_instance:
+        key_name: vprokey
+        region: "{{ region }}"
+        instance_type: t2.micro
+        image: 
+          id: "{{ memcache_ami }}" 
+        wait: yes
+        wait_timeout: 300
+        tags:   
+          Name: "mc01"
+          Project: "Vprofile" 
+          Owner: DevOps Team
+        exact_count: 1
+        #count_tag: 
+          #Name: "Bastion_Host"
+          #Project: "Vprofile" 
+          #Owner: DevOps Team
+        security_group: "{{ vproStacksg_out.group_id }}"
+        vpc_subnet_id: "{{ privsub1id }}"
+      register: mc01_out
+
+    - name: Create EC2 RabbitMQ rmq01
+      ec2_instance:
+        key_name: vprokey
+        region: "{{ region }}"
+        instance_type: t2.micro
+        image: 
+          id: "{{ rmq_ami }}" 
+        wait: yes
+        wait_timeout: 300
+        tags:   
+          Name: "rmq01"
+          Project: "Vprofile" 
+          Owner: DevOps Team
+        exact_count: 1
+        #count_tag: 
+          #Name: "Bastion_Host"
+          #Project: "Vprofile" 
+          #Owner: DevOps Team
+        security_group: "{{ vproStacksg_out.group_id }}"
+        vpc_subnet_id: "{{ privsub1id }}"
+      register: rmq01_out
+
+    - name: Create EC2 Mysql db01
+      ec2_instance:
+        key_name: vprokey
+        region: "{{ region }}"
+        instance_type: t2.micro
+        image: 
+          id: "{{ mysql_ami }}" 
+        wait: yes
+        wait_timeout: 300
+        tags:   
+          Name: "db01"
+          Project: "Vprofile" 
+          Owner: DevOps Team
+        exact_count: 1
+        #count_tag: 
+          #Name: "Bastion_Host"
+          #Project: "Vprofile" 
+          #Owner: DevOps Team
+        security_group: "{{ vproStacksg_out.group_id }}"
+        vpc_subnet_id: "{{ privsub1id }}"
+      register: db01_out
+
+    - debug:
+        var: db01_out.instance_ids[0]
+
+    - local_action:
+        module: ec2_elb_lb
+        name: "vprofile-elb"
+        region: "{{ region }}"
+        state: "{{ state }}"
+        instance_ids: 
+          - "{{ web01_out.instance_ids[0] }}"
+        purge_instance_ids: true
+        security_group_ids: "{{ vproELB_out.group_id }}"
+        subnets:
+          - "{{ pubsub1id }}"
+          - "{{ pubsub2id }}"
+          - "{{ pubsub3id }}"
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80
+
+    - name: Insert/Update Host Id and Name in the file provision-stack/group_vars/hostsip
+      blockinfile:
+        path: provision-stack/group_vars/hostsip
+        block: | 
+          web01_ip: {{ web01_out.instances[0].network_interfaces[0].private_ip_address }}
+          app01_ip: {{ app01_out.instances[0].network_interfaces[0].private_ip_address }}
+          mc01_ip: {{ mc01_out.instances[0].network_interfaces[0].private_ip_address }}
+          rmq01_ip: {{ rmq01_out.instances[0].network_interfaces[0].private_ip_address }}
+          db01_ip: {{ db01_out.instances[0].network_interfaces[0].private_ip_address }}
+
+    - name: Copy loginkey-vpro.pem file to provision-stack directory
+      copy: 
+        src: loginkey-vpro.pem
+        dest: provision-stack/loginkey-vpro.pem
+        mode: '0400'
+
+    - name: Insert/Update Invertory File provision-stack/inventory-vpro
+      blockinfile:
+        path: provision-stack/inventory-vpro
+        block: |
+          web01 ansible_host={{ web01_out.instances[0].network_interfaces[0].private_ip_address }}
+          app01 ansible_host={{ app01_out.instances[0].network_interfaces[0].private_ip_address }}
+          mc01 ansible_host={{ mc01_out.instances[0].network_interfaces[0].private_ip_address }}
+          rmq01 ansible_host={{ rmq01_out.instances[0].network_interfaces[0].private_ip_address }}
+          db01 ansible_host={{ db01_out.instances[0].network_interfaces[0].private_ip_address }}
+          cntl ansible_host=127.0.0.1 ansible_connection=local
+
+          [websrvgrp]
+          web01
+
+          [appsrvgrp]
+          app01
+
+          [mcsrvgrp]
+          mc01
+
+          [rmqsrvgrp]
+          rmq01
+
+          [dbsrvgrp]
+          db01
+
+          [control]
+          cntl
+
+          [stack_inst:children]
+          websrvgrp
+          appsrvgrp
+          mcsrvgrp
+          rmqsrvgrp
+          dbsrvgrp
+
+          [stack_inst:vars]
+          ansible_user=ubuntu
+          ansible_ssh_private_key_file=loginkey-vpro.pem
+          #ansible_python_interpreter=/usr/bin/python3
+
+
+

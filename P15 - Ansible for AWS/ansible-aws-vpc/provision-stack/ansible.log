@@ -1,0 +1,59 @@
+2025-02-01 14:32:38,510 p=1744 u=ubuntu n=ansible | PLAY [Generate qrtifact, copy artifact & SQL file to file directory] ***********
+2025-02-01 14:32:38,535 p=1744 u=ubuntu n=ansible | TASK [Gathering Facts] *********************************************************
+2025-02-01 14:32:39,794 p=1744 u=ubuntu n=ansible | ok: [localhost]
+2025-02-01 14:32:39,806 p=1744 u=ubuntu n=ansible | TASK [Install GIT, JDK and MVN] ************************************************
+2025-02-01 14:32:43,880 p=1744 u=ubuntu n=ansible | ok: [localhost] => (item=git)
+2025-02-01 14:33:17,962 p=1744 u=ubuntu n=ansible | changed: [localhost] => (item=openjdk-8-jdk)
+2025-02-01 14:33:26,530 p=1744 u=ubuntu n=ansible | changed: [localhost] => (item=maven)
+2025-02-01 14:33:26,539 p=1744 u=ubuntu n=ansible | TASK [Clone source code from git hub] ******************************************
+2025-02-01 14:33:35,238 p=1744 u=ubuntu n=ansible | changed: [localhost]
+2025-02-01 14:33:35,246 p=1744 u=ubuntu n=ansible | TASK [mvn install command to build artifact] ***********************************
+2025-02-01 14:34:15,310 p=1744 u=ubuntu n=ansible | changed: [localhost]
+2025-02-01 14:34:15,342 p=1744 u=ubuntu n=ansible | TASK [Copy artifact to files directory] ****************************************
+2025-02-01 14:34:16,488 p=1744 u=ubuntu n=ansible | changed: [localhost] => (item=/home/ubuntu/ansible-aws-vpc/provision-stack/Vprofile-repo/target/vprofile-v2.war)
+2025-02-01 14:34:16,494 p=1744 u=ubuntu n=ansible | TASK [Copy files to files directory] *******************************************
+2025-02-01 14:34:16,952 p=1744 u=ubuntu n=ansible | changed: [localhost]
+2025-02-01 14:34:16,970 p=1744 u=ubuntu n=ansible | PLAY RECAP *********************************************************************
+2025-02-01 14:34:16,971 p=1744 u=ubuntu n=ansible | localhost                  : ok=6    changed=5    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:44:48,784 p=5494 u=ubuntu n=ansible | PLAY [Set Hosts to IP Mapping in /etc/hosts file for all servers] **************
+2025-02-01 14:44:48,804 p=5494 u=ubuntu n=ansible | TASK [Gathering Facts] *********************************************************
+2025-02-01 14:44:50,032 p=5494 u=ubuntu n=ansible | ok: [localhost]
+2025-02-01 14:44:50,047 p=5494 u=ubuntu n=ansible | TASK [Import VPC steup variable file] ******************************************
+2025-02-01 14:44:50,060 p=5494 u=ubuntu n=ansible | fatal: [localhost]: FAILED! => {"ansible_facts": {}, "ansible_included_var_files": [], "changed": false, "message": "Could not find or access 'group_vars/hostip'\nSearched in:\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/vars/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/vars/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/group_vars/hostip on the Ansible Controller.\nIf you are using a module and expect the file to exist on the remote, see the remote_src option"}
+2025-02-01 14:44:50,061 p=5494 u=ubuntu n=ansible | PLAY RECAP *********************************************************************
+2025-02-01 14:44:50,061 p=5494 u=ubuntu n=ansible | localhost                  : ok=1    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:46:26,226 p=5618 u=ubuntu n=ansible | PLAY [Set Hosts to IP Mapping in /etc/hosts file for all servers] **************
+2025-02-01 14:46:26,234 p=5618 u=ubuntu n=ansible | TASK [Gathering Facts] *********************************************************
+2025-02-01 14:46:27,288 p=5618 u=ubuntu n=ansible | ok: [localhost]
+2025-02-01 14:46:27,301 p=5618 u=ubuntu n=ansible | TASK [Import VPC steup variable file] ******************************************
+2025-02-01 14:46:27,314 p=5618 u=ubuntu n=ansible | fatal: [localhost]: FAILED! => {"ansible_facts": {}, "ansible_included_var_files": [], "changed": false, "message": "Could not find or access 'group_vars/hostip'\nSearched in:\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/vars/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/vars/group_vars/hostip\n\t/home/ubuntu/ansible-aws-vpc/provision-stack/group_vars/hostip on the Ansible Controller.\nIf you are using a module and expect the file to exist on the remote, see the remote_src option"}
+2025-02-01 14:46:27,315 p=5618 u=ubuntu n=ansible | PLAY RECAP *********************************************************************
+2025-02-01 14:46:27,315 p=5618 u=ubuntu n=ansible | localhost                  : ok=1    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:48:38,294 p=5738 u=ubuntu n=ansible | PLAY [Set Hosts to IP Mapping in /etc/hosts file for all servers] **************
+2025-02-01 14:48:38,301 p=5738 u=ubuntu n=ansible | TASK [Gathering Facts] *********************************************************
+2025-02-01 14:48:39,356 p=5738 u=ubuntu n=ansible | ok: [localhost]
+2025-02-01 14:48:39,371 p=5738 u=ubuntu n=ansible | TASK [Import VPC steup variable file] ******************************************
+2025-02-01 14:48:39,384 p=5738 u=ubuntu n=ansible | ok: [localhost]
+2025-02-01 14:48:39,390 p=5738 u=ubuntu n=ansible | TASK [Update host files for all the host] **************************************
+2025-02-01 14:48:39,730 p=5738 u=ubuntu n=ansible | changed: [localhost]
+2025-02-01 14:48:39,746 p=5738 u=ubuntu n=ansible | PLAY RECAP *********************************************************************
+2025-02-01 14:48:39,746 p=5738 u=ubuntu n=ansible | localhost                  : ok=3    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:04,063 p=5896 u=ubuntu n=ansible | PLAY [Set Hosts to IP Mapping in /etc/hosts file for all servers] **************
+2025-02-01 14:54:04,071 p=5896 u=ubuntu n=ansible | TASK [Gathering Facts] *********************************************************
+2025-02-01 14:54:05,357 p=5896 u=ubuntu n=ansible | ok: [cntl]
+2025-02-01 14:54:50,152 p=5896 u=ubuntu n=ansible | fatal: [web01]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: ssh: connect to host 172.20.4.229 port 22: Connection timed out", "unreachable": true}
+2025-02-01 14:54:50,183 p=5896 u=ubuntu n=ansible | fatal: [app01]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: ssh: connect to host 172.20.4.45 port 22: Connection timed out", "unreachable": true}
+2025-02-01 14:54:50,193 p=5896 u=ubuntu n=ansible | fatal: [mc01]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: ssh: connect to host 172.20.4.134 port 22: Connection timed out", "unreachable": true}
+2025-02-01 14:54:50,205 p=5896 u=ubuntu n=ansible | fatal: [rmq01]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: ssh: connect to host 172.20.4.144 port 22: Connection timed out", "unreachable": true}
+2025-02-01 14:54:51,386 p=5896 u=ubuntu n=ansible | fatal: [db01]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: ssh: connect to host 172.20.4.41 port 22: Connection timed out", "unreachable": true}
+2025-02-01 14:54:51,402 p=5896 u=ubuntu n=ansible | TASK [Import VPC steup variable file] ******************************************
+2025-02-01 14:54:51,416 p=5896 u=ubuntu n=ansible | ok: [cntl]
+2025-02-01 14:54:51,421 p=5896 u=ubuntu n=ansible | TASK [Update host files for all the host] **************************************
+2025-02-01 14:54:51,764 p=5896 u=ubuntu n=ansible | ok: [cntl]
+2025-02-01 14:54:51,781 p=5896 u=ubuntu n=ansible | PLAY RECAP *********************************************************************
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | app01                      : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | cntl                       : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | db01                       : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | mc01                       : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | rmq01                      : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+2025-02-01 14:54:51,782 p=5896 u=ubuntu n=ansible | web01                      : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   

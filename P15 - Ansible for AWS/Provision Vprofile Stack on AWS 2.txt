@@ -1,0 +1,38 @@
+1. Login to AWS
+2. Create EC2 Instance to run ansible playbook - done in previous step
+3. Install Ansible and Boto - done in previous step
+4. Setup EC2 Role for ansible - done in previous step
+5. Fetch Source Code from Project Ansible for AWS
+	5.1 Start ansible EC2 and Bastion EC2 instances.
+	5.2 open git bash and ssh login to Ansible machine
+	5.3 git pull
+	5.4 git checkout vprofile-stack
+	5.5 cd ansible-aws-vpc
+	5.6 run vpc and bastion host playbook by fetching code from ansible-aws-vpc git repo.
+6. Execute VPC playbook
+7. Playbook for Ec2, ELB, Sec Grp for Vprofile
+	7.1 vprostacksetup.txt
+		nginx_ami: ami-0cb91c7de36eed2cb
+		tomcat_ami: ami-0cb91c7de36eed2cb
+		memcache_ami: ami-0cb91c7de36eed2cb
+		mysql_ami: ami-0cb91c7de36eed2cb
+		rmq_ami: ami-0cb91c7de36eed2cb
+	7.2 vpro-ec2-stack.yml
+		- Import output_var and vpc_setup.txt and vprostacksetup.txt files
+		- Create key pair
+		- Copy key into loginkey-vpro.pem files
+		- Create security group for load balancer
+		- Create security group for Vprofile Stack
+		- Update same security group for all access/
+		- Create Ec2 for Nginx web01
+		- Create Ec2 for Tomcat app01
+		- Create Ec2 for Memcache mc01
+		- Create Ec2 for RabbitMQ rmq01
+		- Create Ec2 for Mysql db01
+		- Create Load Balancer
+		- Assign Nginx to Load Balancer
+		- Copy loginkey-vpro.pem file in provision-stack/group_vars/hostsip
+		- Create Inventory file: provision-stack/inventory-repo
+	7.3 Commit and push to Github
+	7.4 git pull
+	7.5 ansible-playbook vpro-ec2-stack.yml

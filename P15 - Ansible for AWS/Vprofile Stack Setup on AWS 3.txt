@@ -1,0 +1,605 @@
+1. Create AMI Image to Ansible Controller Machine Ec2 Instance.
+2. Launch EC2 instance from AMI.
+	2.1 Key-Pair: ansible-ohio.key.pem
+	2.2 Security Group: Same as Bastion-sg
+	2.3 VPc: Create VPC for vprofile-vpc
+	2.4 Launch
+	2.5 Terminate the Ansible Controller Machine becasue we have created clone of it.
+3. SSh to new EC2 instance vprofile-controller
+	3.1 git pull
+	3.2 cd ansible-aws-vpc
+	3.3 verify "ssh -i loginkey_vpro.pem ubuntu@<private ip of web01>"
+	3.4 git add .
+	3.5 git commit -m ""
+	3.6 git push
+4. Create dbsrvgrp.txt file in groupvars folder
+	dbuser: admin
+	dbpass: admin123
+	dbname: accounts
+5. Create templates folder and create application.j2 file init.
+	5.1 Copy data from "https://github.com/devopshydclub/vprofile-project/blob/vp-rem/src/main/resources/application.properties" and paste it into application.j2 file.
+7. create nginxvpro.j2 file in templates folder
+	upstream vproapp{
+		server app01:8080;
+	}
+	server{
+		listem 80;
+		location / {
+		 proxy_pass http://vproapp;
+		}
+	}
+8. Create ansible.cfg file in provision-stack folder
+	[defaults]
+	# Path to your inventory file (a comma-separated list of host files)
+	inventory = inventory-vpro
+
+	host_key_checking = false
+
+	# Timeout (in seconds) for SSH connections
+	timeout = 15
+
+	# Specify the path for the log file
+	log_path = ./ansible.log
+
+	# Enable/disable caching for fact gathering
+	gathering = smart
+
+	# Number of parallel tasks to run at once (increase for speed)
+	forks = 5
+
+	[privilege_escalation]
+	# Set the default become method (e.g., sudo, su)
+	become = True
+	become_method = sudo
+	become_user = root
+	become_pass = False
+
+	[ssh_connection]
+	retries = 2
+9. Create site.yml file in provision-stack folder(Main file for sequential execution of playbooks)
+	- name: Build Artifact ROOT.war and SQL file to be copied in files/directory
+	  import_playbook: build.yml
+
+	- name: Set Hosts to IP Mapping in /etc/hosts file for all servers 
+	  import_playbook: set_host_ip_map.yml
+
+	- name: Setup dbserver
+	  import_playbook: db.yml
+
+	- name: Deploy SQL file on  dbserver
+	  import_playbook: dbdeploy.yml
+
+	- name: Setup Memcached Service
+	  import_playbook: memcache.yml
+
+	- name: Setup RabitMQ Service
+	  import_playbook: rabbitmq.yml
+
+	- name: Setup Tomcat Application server
+	  import_playbook: appserver.yml
+
+	- name: Setup Nginx webserver
+	  import_playbook: web.yml
+10. Create files folder in provision-stack folder
+11. Create build.yml in provision-stack folder
+	- name: Generate qrtifact, copy artifact & SQL file to file directory
+	  hosts: localhost
+	  connection: local
+	  become: yes
+	  tasks:
+		- name: Install GIT, JDK and MVN
+		  apt:
+			name: "{{ item }}"
+			state: present
+			update_cache: yes
+		  loop:
+			- git
+			- openjdk-8-jdk
+			- maven
+
+		- name: Clone source code from git hub
+		  git:
+			repo: 'https://github.com/devopshydclub/vprofile-project.git'
+			dest: ./Vprofile-repo
+			version: vp-rem
+		  register: git_status
+
+		- name: mvn install command to build artifact
+		  command: "mvn install"
+		  args:
+			chdir: Vprofile-repo
+		  when: git_status.changed
+		  register: mvn_info
+
+		- name: Copy artifact to files directory
+		  copy:
+			src: "{{ item }}"
+			dest: files/ROOT.war
+		  with_fileglob: Vprofile-repo/target/*.war
+
+		- name: Copy files to files directory
+		  copy:
+			src: Vprofile-repo/src/main/resources/db_backup.sql
+			dest: files/db_backup.sql
+12. set_host_ip_map.yml
+	- name: Set Hosts to IP Mapping in /etc/hosts file for all servers 
+	  hosts: all
+	  tasks:
+		- name: Import VPC steup variable file
+		  include_vars: 
+			file: group_vars/hostsip
+
+		- name: Update host files for all the host  
+		  blockinfile: 
+			path: /etc/hosts
+			block: |
+			  {{ web01_ip }} web01
+			  {{ app01_ip }} app01
+			  {{ mc01_ip }} mc01
+			  {{ rmq01_ip }} rmq01
+			  {{ db01_ip }} db01
+13. db.yml
+	- name: Setup MYSQL with accounts db and remote login
+	  hosts: dbsrvgrp
+	  gather_facts: no
+	  tasks:
+		- name: Installing MYSQL service and dependencies
+		  package:
+			name: "{{ item }}"
+			state: present
+			update_cache: yes
+			cache_valid_time: 86400
+		  loop:
+			- mysql-server
+			- mysql-client
+			- python-mysqldb
+			- python3-mysqldb
+			- libmysqlclient-dev
+		  ignore_errors: yes
+		  tags:
+			- package
+
+		- name: Start and enable mysql service 
+		  service:
+			name: mysql
+			state: started
+			enabled: yes
+		  tags: 
+			- svc
+
+		- name: creating mysql user
+		  mysql_user:
+			name: "{{ dbuser }}"
+			password: "{{ dbpass }}"
+			priv: '*.*:ALL'
+			host: '%'
+			state: present
+
+		- name: Creating accounts database
+		  mysql_db:
+			name: "{{ dbname }}"
+			state: present  
+		  
+		- name: Enable remote login to mysql svc 
+		  lineinfile:
+			path: /etc/mysql/mysql.conf.d/mysqld.cnf
+			regexp: '^bind_address'
+			line: 'bind_address = 0.0.0.0'
+			backup: yes
+		  notify:
+			- Restart mysql
+		  tags: conf
+
+	  handlers:
+		- name: Restart mysql service 
+		  service:
+			name: mysql
+			state: restarted
+14. dbdeploy.yml
+	- name: Deploy SQL file on accounts db
+	  hosts: dbsrvgrp
+	  gather_facts: no
+	  tasks:
+		- name: Copy SQL to dbsrv
+		  copy: 
+			src: files/db_backup.sql
+			dest: /tmp/db_backup.sql
+		  tags: 
+			- deploy
+
+		- name: Restoring db
+		  mysql_db: 
+			name: "{{ dbname }}"
+			login_user: "{{ dbuser }}"
+			login_pass: "{{ dbpass }}"
+			state: import
+			target: /tmp/db_backup.sql
+		  notify: 
+			- Restart mysql
+		  tags: deploy
+
+	  handlers:
+		- name: Restart mysql
+		  service:
+			name: mysql
+			state: restarted
+			
+15. memcache.yml
+	- name: Install Memecache , Start and Enable SVC
+	  hosts: mcsrvgrp
+	  gather_facts: no
+	  tasks:  
+		- name: Install Memcached
+		  apt:
+			name: memcached
+			state: present 
+			update_cache: yes
+			cache_valid_time: 86400
+		  tags:
+			- package
+
+		- name: Start and enable memcache service
+		  service:
+			name: memcached
+			state: started
+			enabled: yes
+		  tags: 
+			- svc
+
+		- name: Enable remote login to memcache
+		  lineinfile:
+			path: /etc/memcached.conf
+			regexp: '^-l'
+			line: '-l 0.0.0.0'
+			backup: yes
+		  notify: 
+			- Restart memcached
+		  tags: 
+			- conf
+
+	  handlers:
+		- name: Restart memcached
+		  service:
+			name: memcached
+			state: restarted
+			
+16. rabbitmq.yml
+	---
+	- name: Install & Setup RabbitMQ with user
+	  hosts: rmqsrvgrp
+	  gather_facts: no
+	  tasks:
+		- name: Install Erlang Repository Package
+		  apt:
+			deb: https://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb
+		  tags:
+			- package
+
+		- name: Add an Erlang Solution public Key
+		  apt_key:
+			url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
+			state: present
+		  tags:
+			- package
+
+		- name: Install Erlang
+		  apt:
+			name: erlang
+			update_cache: yes
+			cache_valid_time: 86400
+			state: present
+		  tags:
+			- package
+
+		- name: Add an Apt signing key, uses whichever key is at the URL
+		  apt_key:
+			url: https://github.com/rabbitmq/signing-keys/releases/download/2.0/rabbitmq-release-signing-key.asc
+			state: present
+		  tags:
+			- package
+
+		- apt_repository:
+			repo: deb https://dl.bintray.com/rabbitmq/debian bionic main
+			state: present
+		  tags:
+			- package
+
+		- name: Install Rabbit MQ
+		  apt:
+			name: rabbitmq-server
+			state: present
+			update_cache: yes
+		  tags:
+			- package
+
+
+		- name: Start & Enable RMQ
+		  service:
+			name: rabbitmq-server
+			state: started
+			enabled: yes
+		  tags:
+			- svc
+
+		- name: Config setup
+		  copy:
+			content: |
+			  [{rabbit, [{loopback_users, []}]}].
+			dest: /etc/rabbitmq/rabbitmq.config
+		  notify:
+			- Restart RMQ
+		  tags:
+			- conf
+
+
+		- rabbitmq_user:
+			user: test
+			password: test
+			configure_priv: .*
+			read_priv: .*
+			write_priv: .*
+			tags: administrator
+			state: present
+		  notify:
+			- Restart RMQ
+		  tags:
+			- conf
+
+
+		- name: Enables the rabbitmq_management plugin
+		  rabbitmq_plugin:
+			names: rabbitmq_management
+			state: enabled
+		  notify:
+			- Restart RMQ
+		  tags:
+			- package
+
+	  handlers:
+		- name: Restart RMQ
+		  service:
+			name: rabbitmq-server
+			state: restarted
+17. appserver.yml
+	---
+	- name: Setup Tomcat8 & Deploy Artifact
+	  hosts: appsrvgrp
+	  #  gather_facts: no
+	  vars:
+		timestamp: "{{ansible_date_time.date}}_{{ansible_date_time.hour}}_{{ansible_date_time.minute}}"
+		tom_url: https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.37/bin/apache-tomcat-8.5.37.tar.gz
+	  tasks:
+		- name: Install JDK on Ubuntu 18/20
+		  apt:
+			name: openjdk-8-jdk
+			state: present
+			update_cache: yes
+
+		- name: Download Tomcat Tar Ball/Binaries
+		  get_url:
+			url: "{{tom_url}}"
+			dest: /tmp/tomcat-8.tar.gz
+
+		- name: Add tomcat group
+		  group:
+			name: tomcat
+			state: present
+
+		- name: Add tomcat user
+		  user:
+			name: tomcat
+			group: tomcat
+			shell: /bin/nologin
+			home: /usr/local/tomcat8
+
+		- file:
+			path: /tmp/tomcat8
+			state: directory
+
+		- name: Extract tomcat
+		  unarchive:
+			src: /tmp/tomcat-8.tar.gz
+			dest: /tmp/tomcat8/
+			remote_src: yes
+			list_files: yes
+		  register: unarchive_info
+
+		- debug:
+			msg: "{{unarchive_info.files[0].split('/')[0]}}"
+
+		- name: Synchronize /tmp/tomcat8/tomcat_cont /usr/local/tomcat8.
+		  synchronize:
+			src: "/tmp/tomcat8/{{unarchive_info.files[0].split('/')[0]}}/"
+			dest: /usr/local/tomcat8/
+		  delegate_to: "{{ inventory_hostname }}"
+
+		- name: Change ownership of /usr/local/tomcat8
+		  file:
+			path: /usr/local/tomcat8
+			owner: tomcat
+			group: tomcat
+			recurse: yes
+
+		- name: Setup tomcat SVC file on ubuntu 16 and 18
+		  template:
+			src: templates/tomcat8-ubuntu-svcfile.j2
+			dest: /etc/systemd/system/tomcat8.service
+			mode: "a+x"
+
+		- name: just force systemd to reread configs (2.4 and above)
+		  systemd:
+			daemon_reload: yes
+
+		- name: Start & Enable tomcat SVC
+		  service:
+			name: tomcat8
+			state: started
+			enabled: yes
+		  tags:
+			- svc
+
+		- stat:
+			path: /usr/local/tomcat8/webapps/ROOT
+		  register: artifact_stat
+		  tags:
+			- deploy
+
+		- name: Stop tomcat8 svc
+		  service:
+			name: tomcat8
+			state: stopped
+		  tags:
+			- deploy
+
+		- name: Try Backup and Deploy
+		  block:
+			- name: Archive ROOT dir with timestamp
+			  archive:
+				path: /usr/local/tomcat8/webapps/ROOT
+				dest: "/opt/ROOT_{{timestamp}}.tgz"
+			  when: artifact_stat.stat.exists
+			  register: archive_info
+			  tags:
+				- deploy
+
+			- name: copy ROOT dir with old_ROOT name
+			  shell: cp -r ROOT old_ROOT
+			  args:
+				chdir: /usr/local/tomcat8/webapps/
+
+			- name: Delete current artifact
+			  file:
+				path: "{{item}}"
+				state: absent
+			  when: archive_info.changed
+			  loop:
+				- /usr/local/tomcat8/webapps/ROOT
+				- /usr/local/tomcat8/webapps/ROOT.war
+			  tags:
+				- deploy
+
+			- name: Try deploy artifact else restore from previos old_ROOT
+			  block:
+				- name: Deploy vprofile artifact
+				  copy:
+					src: files/ROOT.war
+					dest: /usr/local/tomcat8/webapps/ROOT.war
+				  register: deploy_info
+				  tags:
+					- deploy
+			  rescue:
+				- shell: cp -r old_ROOT ROOT
+				  args:
+					chdir: /usr/local/tomcat8/webapps/
+
+		  rescue:
+			- name: Start tomcat8 svc
+			  service:
+				name: tomcat8
+				state: started
+
+		- name: Start tomcat8 svc
+		  service:
+			name: tomcat8
+			state: started
+		  when: deploy_info.changed
+		  tags:
+			- deploy
+
+		- name: Wait until ROOT.war is extracted to ROOT directory
+		  wait_for:
+			path: /usr/local/tomcat8/webapps/ROOT
+		  tags:
+			- deploy
+
+		- name: Deploy web configuration file
+		  template:
+			src: templates/application.j2
+			dest: /usr/local/tomcat8/webapps/ROOT/WEB-INF/classes/application.properties
+			force: yes
+		  notify:
+			- Restart Tomcat
+		  tags:
+			- deploy
+
+	  handlers:
+		- name: Restart Tomcat
+		  service:
+			name: tomcat8
+			state: restarted
+
+	create file tomcat8-ubuntu-svcfile.j2 in templates folder
+		[Unit]
+		Description=Tomcat
+		After=network.target
+
+		[Service]
+		User=tomcat
+		WorkingDirectory=/usr/local/tomcat8
+		Environment=JRE_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre
+		Environment=JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre
+		Environment=CATALINA_HOME=/usr/local/tomcat8
+		Environment=CATALINE_BASE=/usr/local/tomcat8
+		ExecStart=/usr/local/tomcat8/bin/catalina.sh run
+		ExecStop=/usr/local/tomcat8/bin/shutdown.sh
+		SyslogIdentifier=tomcat-%i
+
+		[Install]
+		WantedBy=multi-user.target
+		
+18. web.yml
+
+	- name: Setup Nginx SVC
+	  hosts: websrvgrp
+	  gather_facts: no
+	  tasks:
+		- name: Install Nginx
+		  apt: 
+			name: nginx
+			state: present
+			update_cache: yes
+			cache_valid_time: 86400
+		  tags:
+			- package
+
+		- name: Start and Enable Nginx
+		  service:
+			name: nginx
+			state: started
+			enabled: yes
+		  tags:
+			- svc
+
+		- name: Diable Nginx Default website
+		  file: 
+			path: /etc/nginx/sites-enabled/default
+			state: absent
+		  tags:
+			- conf
+
+		- name: Deploy web config file
+		  template:
+			src: templates/nginxvpro.j2
+			dest: /etc/nginx/sites-available/vproapp
+		  tags: 
+			- conf
+
+		- name: Enable vproapp website
+		  file: 
+			src: /etc/nginx/sites-available/vproapp
+			dest: /etc/nginx/sites-enabled/vproapp
+			state: link
+		  notify:
+			- Restart Nginx
+		  tags:
+			- conf
+		
+	  handlers:
+		- name: Restart Nginx
+		  service:
+			name: nginx
+			state: restarted
+			
+19. git comit and push.
+20. git pull in controller ssh machine
+21. run "ansible-playbook site.yml"

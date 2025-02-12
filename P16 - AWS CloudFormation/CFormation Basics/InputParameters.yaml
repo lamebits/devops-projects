@@ -1,0 +1,37 @@
+Parameters:
+  NameOfService:
+    Description: Name of the service the stack used to
+    Type: String
+  InstanceTypeParameter:
+    Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - m1.small
+      - m1.large
+  KeyName:
+    Description: Name of EC2 Login Key
+    Type: AWS::EC2::KeyPair::KeyName
+Mappings:
+  AMIRegionMap:
+    us-east-2:
+      AMI: ami-088b41ffb0933423f
+    us-east-1:
+      AMI: ami-085ad6ae776d8f09c
+
+Resources:
+  MyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - AMIRegionMap
+        - !Ref AWS::Region
+        - AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyName
+      SubnetId: subnet-065578495c7890b9c
+      Tags:
+        - Key: "Name"
+          Value: !Ref NameOfService
+    
